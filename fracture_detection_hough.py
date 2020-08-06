@@ -9,61 +9,102 @@ import cv2
 import svgwrite
 import numpy as np
 import math
-#import scipy.stats as st
-#import pycircstat as cs
 from sklearn.decomposition import PCA
-
 from PIL import Image
-
 from skimage.morphology import skeletonize
-from skimage.filters import (threshold_otsu, threshold_niblack, 
-                             threshold_sauvola)
-
-#from skimage.data import binary_blobs
+# from skimage.filters import (threshold_otsu, threshold_niblack,
+#                              threshold_sauvola)
 
 import colorsys
-
 import matplotlib.pyplot as plt
-
-
 from numba import jit
 
-
-#import datetime
+# from skimage.data import binary_blobs
+# import scipy.stats as st
+# import pycircstat as cs
+# import datetime
 
 theta = math.pi/180
 
-def showImage (image):
+
+def show_image(image):
+    '''
+    Opens image on system's viewer.
+
+    Parameters
+    ----------
+    image : TYPE image
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    '''
     pil_img = Image.fromarray(image)
     pil_img.show()
-    
+    return
 
-def autoCanny(image, sigma=0.33):
-    #https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-	# compute the median of the single channel pixel intensities
-	v = np.median(image)
-	# apply automatic Canny edge detection using the computed median
-	lower = int(max(0, (1.0 - sigma) * v))
-	upper = int(min(255, (1.0 + sigma) * v))
-	edged = cv2.Canny(image, lower, upper)
-	# return the edged image
-	return edged
+
+def auto_canny(image, sigma=0.33):
+    '''
+    Apply automatic Canny edge detection using the computed median
+    https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+
+    Parameters
+    ----------
+    image : TYPE
+        DESCRIPTION.
+    sigma : TYPE, optional
+        DESCRIPTION. The default is 0.33.
+
+    Returns
+    -------
+    edged : TYPE
+        DESCRIPTION.
+
+    '''
+
+    v = np.median(image)
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+
+    return edged
+
 
 @jit(nopython=True)
-def autoLocalThresholding(image, kernelsize, mode):
-    if kernelsize % 2 == 0: return
-    offset = int(kernelsize/2)
-    newimage = np.zeros(np.shape(image))
+def adaptative_thresholding(image, kernelsize, mode):
     '''
-    if mode == 'sauvola':
-        newimage = image > threshold_sauvola(image, window_size=kernelsize, k=0.2, r=None)
-    if mode == 'niblack':
-        newimage = image > threshold_niblack(image, window_size=kernelsize, k=0.8)
-    if mode == 'otsu':
-        newimage = image > threshold_otsu(image)
+    Apply a adaptative thresholding method to a grayscale image array
+
+    Parameters
+    ----------
+    image : TYPE np.uint8
+        Grayscale image.
+    kernelsize : TYPE int
+        Kernel size.
+    mode : TYPE string
+        Method name e.g. "sauvola", "niblack", "phansalkar".
+
+    Returns
+    -------
+    newimage : TYPE np.uint8
+        Grayscale image.
+
     '''
-    for i in range(0,np.shape(image)[1]): #coluna
-        for j in range(0,np.shape(image)[0]): #linha
+    if kernelsize % 2 == 0:  # Exit function if kernel is even
+        return
+
+    offset = int(kernelsize/2)  # Pixels for each side around a kernel center
+
+    newimage = np.zeros(np.shape(image))  # Thresholded image
+
+    for i in range(0, np.shape(image)[1]):  # collumn
+        for j in range(0, np.shape(image)[0]):  # row
+
+            # Create and change offsets for each direction according to (i,j)
+            # position near the limits of the image
             offsetL = offsetR = offsetU = offsetD = offset
             if j <= offset:
                 offsetL = offset + (j - offset)
@@ -73,16 +114,23 @@ def autoLocalThresholding(image, kernelsize, mode):
                 offsetU = offset + (i - offset)
             if np.shape(image)[1] - i <= offset:
                 offsetD = np.shape(image)[1] - i
-                
+
+            # Store in memory (temp) the kernel for (i,j) position
             temp = image[j-offsetL:j+offsetR+1, i-offsetU:i+offsetD+1]
+
+            # Apply thresholding method
             if mode == 'niblack':
                 T = int(np.mean(temp) + 0.2*np.std(temp))
-                if image[j,i] <= T: newimage[j,i] = 0
-                else: newimage[j,i] = 255
+                if image[j, i] <= T:
+                    newimage[j, i] = 0
+                else:
+                    newimage[j, i] = 255
             if mode == 'sauvola':
                 T = int(np.mean(temp)*(1 + 0.5*(np.std(temp)/128 - 1)))
-                if image[j,i] <= T: newimage[j,i] = 0
-                else: newimage[j,i] = 255
+                if image[j, i] <= T:
+                    newimage[j, i] = 0
+                else:
+                    newimage[j, i] = 255
     return newimage
 
 
@@ -730,8 +778,8 @@ def fractureAreaPlot (data, max_value, canvas, mode = 'raster', index = 'intensi
             canvas.add(canvas.text(str(round(row[4],2)), insert=(row[0]+2,row[1]+15), stroke='none', fill=svgwrite.rgb(15, 15, 15, '%'), font_size='9px', font_weight="bold"))
         elif mode == 'raster':
             canvas = cv2.rectangle(canvas, (int(row[0]), int(row[1])), (int(row[2]), int(row[3])), color, -1)
-    #frac.showImage(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
-    #frac.showImage(canvas)
+    #frac.show_image(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    #frac.show_image(canvas)
     return canvas
 
 
@@ -898,7 +946,7 @@ def loadEdgeData():
     
     canvas = np.uint8(canvas)
     cv2.imwrite('ridge.png', canvas)
-    #frac.showImage(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+    #frac.show_image(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
      
 #'''
 
@@ -963,10 +1011,10 @@ def loadAtlasFile(File,offsetX,offsetY, k, segm_groups = []):
 
 
 
-#showImage(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
+#show_image(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
 
 #cv2.imwrite("intensity3.tif", cv2.addWeighted(canvas0, 0.5, canvas4, 0.5, 0.0))
-showImage(cv2.cvtColor(canvas4, cv2.COLOR_BGR2RGB))
+show_image(cv2.cvtColor(canvas4, cv2.COLOR_BGR2RGB))
 cv2.imwrite("intensity.png", canvas4)
 
 
@@ -979,11 +1027,11 @@ for row in data:
         color = colorsys.hsv_to_rgb((0.60-row[5]/spacing_max*0.15),1,1)
         color = (int(color[0]*255), int(color[1]*255), int(color[2]*255))
     cv2.rectangle(canvas4, (int(row[0]),int(row[1])),(int(row[2]),int(row[3])), color, -1)
-showImage(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
+show_image(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
 
 
 #cv2.rectangle(canvas4, (x0,y0),(x1,y1),(0,255,255),3)
-showImage(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
+show_image(cv2.cvtColor(cv2.addWeighted(canvas4, 0.4, canvas0, 0.5, 0.0), cv2.COLOR_BGR2RGB))
 cv2.imwrite("intensity.tif",cv2.addWeighted(canvas4, 0.4, cv2.bitwise_not(canvas0), 0.5, 0.0))
 
 
@@ -1106,8 +1154,8 @@ dwg.add(dwg.text('50', insert=(100,430), stroke='none', fill=svgwrite.rgb(15, 15
 dwg.add(dwg.text('100', insert=(150,430), stroke='none', fill=svgwrite.rgb(15, 15, 15, '%'), font_size='9px', font_weight="bold"))
 dwg.add(dwg.image("NorthArrow_04.svg", (50, 270), size=(60,60)))
 dwg.save()
-#showImage(canvas4)
-showImage(cv2.cvtColor(canvas0, cv2.COLOR_BGR2RGB))
+#show_image(canvas4)
+show_image(cv2.cvtColor(canvas0, cv2.COLOR_BGR2RGB))
 
 cv2.imwrite("fractures.png",canvas0)
 '''

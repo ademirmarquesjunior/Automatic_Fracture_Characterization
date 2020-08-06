@@ -78,19 +78,18 @@ layout = [[sg.Menu(menu_def, tearoff=True)],
                                    key='_Cb_Smooth_'),
                      sg.Button('Blur', key='_Bt_Smooth_', disabled=True)]])],
 
-                [sg.Frame("1-pixel extraction", [[
+                [
                     sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
                                                  disabled=True)]]),
-                    sg.Frame("Skeleton", [[
-                        sg.Frame("Thresholding",
-                                 [[sg.InputCombo(('Sauvola', 'Niblack'),
-                                                 key='_Cb_threshold_'),
-                                   sg.Button('Threshold', key='_Bt_threshold_',
-                                             disabled=True)]]),
-                        sg.Frame("Skeletonization", [[
+                    sg.Frame("Thresholding",
+                             [[sg.InputCombo(('Sauvola', 'Niblack'),
+                                             key='_Cb_threshold_'),
+                               sg.Button('Threshold', key='_Bt_threshold_',
+                                         disabled=True)]]),
+                    sg.Frame("Skeletonization", [[
                             sg.InputCombo(('Lee'), size=(5, 1)),
                             sg.Button('Skeleton', key='_Bt_skeleton_',
-                                      disabled=True)]])]])]])],
+                                      disabled=True)]])],
 
                 [sg.Frame("Hough transform", [
                     [sg.Text('Threshold'), sg.Slider(range=(1, 100),
@@ -288,7 +287,7 @@ while True:
     elif event == '_Bt_Canny_':
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
-        onepixel = frac.autoCanny(smooth)
+        onepixel = frac.auto_canny(smooth)
         cv2.imwrite("canny.png", onepixel)
         temp = updateCanvas(onepixel, hor, ver)
         window.Element("_Bt_hough_").Update(disabled=False)
@@ -299,16 +298,16 @@ while True:
         if values['_Cb_threshold_'] == 'Sauvola':
             # import fracture_detection_hough as frac
             start = timeit.timeit()
-            threshold = frac.autoLocalThresholding(smooth, 31, 'sauvola')
+            threshold = frac.adaptative_thresholding(smooth, 31, 'sauvola')
             end = timeit.timeit()
             print((end - start)*100)
 
         if values['_Cb_threshold_'] == 'Niblack':
             start = timeit.timeit()
-            threshold = frac.autoLocalThresholding(smooth, 31, 'niblack')
+            threshold = frac.adaptative_thresholding(smooth, 31, 'niblack')
             end = timeit.timeit()
             print((end - start)*100)
-            # frac.showImage(threshold)
+            # frac.show_image(threshold)
         temp = updateCanvas(threshold, hor, ver)
         cv2.imwrite("threshold.png", threshold)
         window.Element("_Bt_skeleton_").Update(disabled=False)
@@ -361,9 +360,9 @@ while True:
                                          (np.shape(image)[0], np.shape(
                                              image)[1], 3), image=smooth)
 
-        # frac.showImage(connectionlines)
-        # frac.showImage(houghlines)
-        # frac.showImage(cv2.addWeighted(connectionlines, 0.4, cv2.cvtColor(
+        # frac.show_image(connectionlines)
+        # frac.show_image(houghlines)
+        # frac.show_image(cv2.addWeighted(connectionlines, 0.4, cv2.cvtColor(
         #   smooth, cv2.COLOR_GRAY2BGR), 0.5, 0.0))
 
         cv2.imwrite("connected3.png", connectionlines)
@@ -395,7 +394,7 @@ while True:
             np.shape(image)[0], np.shape(image)[1], 3), image)
         cv2.imwrite('pca_lines.png', pca_lines)
 
-        # frac.showImage()
+        # frac.show_image()
         # plt.hist(segm_group_angles[:,1])
 
         segmgroups = frac.drawLineGroups(segm_groups, segm_group_angles,
@@ -406,7 +405,7 @@ while True:
 
         cv2.imwrite('groups.png', segmgroups)
 
-        # frac.showImage(segmgroups)
+        # frac.show_image(segmgroups)
 
         window.Element("_Sl_horizontal_").Update(value=0)
         window.Element("_Sl_vertical_").Update(value=0)
@@ -481,7 +480,7 @@ while True:
                                        image=intensity, mode='black')
             cv2.imwrite('intensity.png', intensity)
             intensity = cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB)
-            # frac.showImage(cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB))
+            # frac.show_image(cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB))
 
             spacing = frac.fractureAreaPlot(data, boxsize, image, 'raster',
                                             'spacing')
@@ -490,7 +489,7 @@ while True:
 
             cv2.imwrite('spacing.png', spacing)
             spacing = cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB)
-            # frac.showImage(cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB))
+            # frac.show_image(cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB))
 
             intensity_area = frac.fractureAreaPlot(data, boxsize, image,
                                                    'raster', 'intensity_area')
@@ -500,7 +499,7 @@ while True:
                     if threshold[i, j] == 0:
                         intensity_area[i, j] = [0, 0, 0]
 
-            # frac.showImage(cv2.cvtColor(intensity_area, cv2.COLOR_BGR2RGB))
+            # frac.show_image(cv2.cvtColor(intensity_area, cv2.COLOR_BGR2RGB))
             cv2.imwrite('intensity_area.png', intensity_area)
 
             temp = updateCanvas(intensity, hor, ver)
@@ -525,7 +524,7 @@ while True:
             # plt.savefig("plot.png")
 
             # temp = cv2.circle(temp, (y0, x0), 30, [255,255,255], 10)
-            # frac.showImage(temp)
+            # frac.show_image(temp)
             temp = updateCanvas(temp, hor, ver)
         except Exception as e:
             print(e)
@@ -597,7 +596,7 @@ lines1 = lsd.detect(np.uint8(smooth))[0]
 angles0 = frac.getLineAngles(np.reshape(lines1, (np.shape(lines1)[0],4)))
 image0 = frac.drawLines(np.reshape(lines1, (np.shape(lines1)[0],4)), angles,
                         np.shape(image))
-frac.showImage(image0)
+frac.show_image(image0)
 cv2.imwrite("lsd.png", image0)
 '''
 
@@ -615,4 +614,3 @@ import sys
 
 sys.getsizeof(image)
 '''
-###################################################################
