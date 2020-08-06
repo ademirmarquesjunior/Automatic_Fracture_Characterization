@@ -317,7 +317,7 @@ while True:
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         # if values['_Cb_threshold_'] == 'Lee':
-        onepixel = frac.skeletonizeImage(threshold, True, 'lee')
+        onepixel = frac.skeletonize_image(threshold, True, 'lee')
         # temp = onepixel
         temp = updateCanvas(onepixel, hor, ver)
         cv2.imwrite("skeleton.png", onepixel)
@@ -444,10 +444,10 @@ while True:
             inicio = utm.from_latlon(dataset.xy(0,0)[0], dataset.xy(0,0)[1])
             fim = utm.from_latlon(dataset.xy(0,60)[0], dataset.xy(0,60)[1])
 
-            print(frac.computeDistance(inicio[0], inicio[1] , fim[0], fim[1]))
+            print(frac.compute_distance(inicio[0], inicio[1] , fim[0], fim[1]))
             '''
 
-            boxsize = int(frac.computeDistance(0, 0, row, col))
+            boxsize = int(frac.compute_distance(0, 0, row, col))
 
         # boxsize = 60
         data = frac.ComputeFractureStatistics(connected_lines, threshold,

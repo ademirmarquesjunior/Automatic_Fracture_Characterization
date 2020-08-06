@@ -98,7 +98,7 @@ def adaptative_thresholding(image, kernelsize, mode):
 
     offset = int(kernelsize/2)  # Pixels for each side around a kernel center
 
-    newimage = np.zeros(np.shape(image))  # Thresholded image
+    new_image = np.zeros(np.shape(image))  # Thresholded image
 
     for i in range(0, np.shape(image)[1]):  # collumn
         for j in range(0, np.shape(image)[0]):  # row
@@ -122,45 +122,84 @@ def adaptative_thresholding(image, kernelsize, mode):
             if mode == 'niblack':
                 T = int(np.mean(temp) + 0.2*np.std(temp))
                 if image[j, i] <= T:
-                    newimage[j, i] = 0
+                    new_image[j, i] = 0
                 else:
-                    newimage[j, i] = 255
+                    new_image[j, i] = 255
             if mode == 'sauvola':
                 T = int(np.mean(temp)*(1 + 0.5*(np.std(temp)/128 - 1)))
                 if image[j, i] <= T:
-                    newimage[j, i] = 0
+                    new_image[j, i] = 0
                 else:
-                    newimage[j, i] = 255
-    return newimage
+                    new_image[j, i] = 255
+    return new_image
 
 
-def skeletonizeImage (image, invert, mode):
+def skeletonize_image(image, invert, mode):
+    '''
+    Apply morphologic operation skeletonize
+
+    Parameters
+    ----------
+    image : Array of uint8
+        Thresholded image with 0 and 255 values.
+    invert : bool
+        Invert the threshold elements in image.
+    mode : str
+        Method of skeletonization.
+
+    Returns
+    -------
+    new_image : TYPE
+        DESCRIPTION.
+
+    '''
     if invert:
-        invert = np.zeros(np.shape(image))
-        for i in range(0,np.shape(image)[1]):
-            for j in range(0,np.shape(image)[0]):
-                if image[j,i] == 255: invert[j,i] = 0
-                else: invert[j,i] = 255
-        image = invert
-    image = cv2.threshold(image, 100,1, cv2.THRESH_BINARY)[1]
-    return skeletonize(image)*255
+        new_image = np.zeros(np.shape(image))
+        for i in range(0, np.shape(image)[1]):
+            for j in range(0, np.shape(image)[0]):
+                if image[j, i] == 255:
+                    new_image[j, i] = 0
+                else:
+                    new_image[j, i] = 255
+
+    new_image = cv2.threshold(new_image, 100, 1, cv2.THRESH_BINARY)[1]
+    new_image = skeletonize(new_image)*255
+    return new_image
 
 
-# Line iterator substituting opencv removed implementation
-# https://stackoverflow.com/questions/32328179/opencv-3-0-python-lineiterator
 @jit(nopython=True)
 def bresenham_march(image, p1, p2):
+    '''
+    Line iterator substituting opencv removed implementation
+    https://stackoverflow.com/questions/32328179/opencv-3-0-python-lineiterator
+
+    Parameters
+    ----------
+    image : Array of uint8
+        Grayscale image.
+    p1 : list
+        x and y coordinates of first point.
+    p2 : list
+        x and y coordinates of first point.
+
+    Returns
+    -------
+    ret : list
+        List of pixel intensities for the given segment.
+
+    '''
     x1 = p1[0]
     y1 = p1[1]
     x2 = p2[0]
     y2 = p2[1]
-    #tests if any coordinate is outside the image
-    if ( 
+    # tests if any coordinate is outside the image
+    if (
         x1 >= image.shape[0]
         or x2 >= image.shape[0]
         or y1 >= image.shape[1]
         or y2 >= image.shape[1]
-    ): #tests if line is in image, necessary because some part of the line must be inside, it respects the case that the two points are outside
+    ):  # tests if line is in image, necessary because some part of the line
+        # must be inside, it respects the case that the two points are outside
         if not cv2.clipLine((0, 0, image.shape[0], image.shape[1]), p1, p2):
             print("not in region")
             return
@@ -191,7 +230,7 @@ def bresenham_march(image, p1, p2):
     for x in range(x1, x2):
         p = (y, x) if steep else (x, y)
         if p[0] < image.shape[0] and p[1] < image.shape[1]:
-            #ret.append((p, image[p]))
+            # ret.append((p, image[p]))
             ret.append(image[p])
         error += delta_error
         if error >= 0.5:
@@ -225,8 +264,8 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
             if j != index and count[j] != 2:
                 if checkConnection(connections, index, j):
                     return False
-                dist1 = computeDistance(vertice[0], vertice[1], lines[j][0], lines[j][1])
-                dist2 = computeDistance(vertice[0], vertice[1], lines[j][2], lines[j][3])
+                dist1 = compute_distance(vertice[0], vertice[1], lines[j][0], lines[j][1])
+                dist2 = compute_distance(vertice[0], vertice[1], lines[j][2], lines[j][3])
                 aux = False
                 if dist1 <= offset or dist2 <= offset:
                     aux = True
@@ -238,16 +277,16 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
         else:
             link = []
             for k in segm:
-                alpha = compareAngles(vertice, lines[index], lines[k])
+                alpha = compare_angles(vertice, lines[index], lines[k])
                 if alpha[0] >= alpha_limit: # and alpha[1] > 1
                     new_segm = [int(vertice[0]), int(vertice[1]), int(alpha[2]), int(alpha[3])]
-                    beta = compareAngles(vertice, lines[index], new_segm)
+                    beta = compare_angles(vertice, lines[index], new_segm)
                     if beta[0] >= beta_limit:
                         length = sd = 0
                         new_segm.append(alpha[0])
                         new_segm.append(beta[0])
                         if mode == 'distance':
-                            length = computeDistance(new_segm[0], new_segm[1], new_segm[2], new_segm[3])
+                            length = compute_distance(new_segm[0], new_segm[1], new_segm[2], new_segm[3])
                         new_segm.append(length)
                         if mode == 'deviation':
                             pixels = bresenham_march(image, (new_segm[0],new_segm[1]), (new_segm[2],new_segm[3]))
@@ -348,21 +387,41 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     #Add the aditional segments to the list of segments
     return np.insert(lines, np.shape(lines)[0], new_lines, axis = 0)
 
-###########################################################################################
-def computeDistance(x0,y0,x1,y1):
+
+def compute_distance(x0, y0, x1, y1):
+    '''
+    Compute the distance between two point p and q
+
+    Parameters
+    ----------
+    x0 : TYPE
+        DESCRIPTION.
+    y0 : TYPE
+        DESCRIPTION.
+    x1 : TYPE
+        DESCRIPTION.
+    y1 : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    dist : float
+        Distance in pixel size.
+
+    '''
     dist = math.sqrt(math.pow((x1 - x0), 2) + math.pow((y1 - y0), 2))
     return dist
-    
-        
-def compareAngles(base, line1, line2):
+
+
+def compare_angles(base, line1, line2):
     x0, y0 = base
     if [line1[0], line1[1]] == [x0, y0]:
         px, py = [line1[2], line1[3]]
     else:
         px, py = [line1[0], line1[1]]
         
-    dist0 = computeDistance(x0,y0,line2[0],line2[1])
-    dist1 = computeDistance(x0,y0,line2[2],line2[3])
+    dist0 = compute_distance(x0,y0,line2[0],line2[1])
+    dist1 = compute_distance(x0,y0,line2[2],line2[3])
     
     if dist0 < dist1:
         px = px - x0
@@ -409,37 +468,37 @@ def findIntersection(line1, line2):
 
 
 #Check if segments have points overlapping in the same direction
-def onsegment(p,q,r):
-    if (q.x<= max(p.x,r.x) and q.x >= min(p.x,r.x) and q.y<= max(p.y,r.y) and q.y>=min(p.y,r.y)):
+def onsegment(p, q, r):
+    if (q.x <= max(p.x, r.x) and q.x >= min(p.x, r.x) and q.y <= max(p.y, r.y) and q.y >= min(p.y, r.y)):
         return 1
     return 0
 
 #Check if segments cross each other
-def intersection(p,q,r):
-    val = (q.y - p.y)* (r.x - q.x) - (q.x - p.x)*(r.y - q.y)
-    if val==0:
+def intersection(p, q, r):
+    val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x)*(r.y - q.y)
+    if val == 0:
         return 0
-    if val>0:
+    if val > 0:
         return 1
     else:
         return 2
     
 #Check if segments intersect (cross or overlap)
-def dointersect(p1,q1,p2,q2):
-    o1 = intersection(p1,q1,p2)
-    o2 = intersection(p1,q1,q2)
-    o3 = intersection(p2,q2,p1)
-    o4 = intersection(p2,q2,q1)
-    
-    if (o1!=o2 and o3!=o4):
+def dointersect(p1, q1, p2, q2):
+    o1 = intersection(p1, q1, p2)
+    o2 = intersection(p1, q1, q2)
+    o3 = intersection(p2, q2, p1)
+    o4 = intersection(p2, q2, q1)
+
+    if (o1 != o2 and o3 != o4):
         return True
-    if (o1 == 0 and onsegment(p1,p2,q1)):
+    if (o1 == 0 and onsegment(p1, p2, q1)):
         return True
-    if (o2 == 0 and onsegment(p1,q2,q1)):
+    if (o2 == 0 and onsegment(p1, q2, q1)):
         return True
-    if (o3 == 0 and onsegment(p2,p1,q2)):
+    if (o3 == 0 and onsegment(p2, p1, q2)):
         return True
-    if (o4 == 0 and onsegment(p2,q1,q2)):
+    if (o4 == 0 and onsegment(p2, q1, q2)):
         return True
     return False
 
@@ -512,8 +571,8 @@ def generateSegmGroups(lines):
 #Get distance and angle of all lines regarding north
 def getLineAngles(lines):
     n = np.shape(lines)[0]
-    angles = np.zeros((n,2), np.float64)
-    for i in range(0,n):
+    angles = np.zeros((n, 2), np.float64)
+    for i in range(0, n):
         length = np.sqrt(np.power((lines[i][2] - lines[i][0]), 2) + np.power((lines[i][3] - lines[i][1]), 2))
         
         '''if (lines[i][1]-lines[i][3]) == 0:
@@ -662,12 +721,7 @@ def drawLineGroups(segm_groups, segm_group_angles, lines, shape, image = None):
     
     return canvas
 
-##########################################################################
 
-
-
-##########################################################################    
-#Check density and spacing
 def ComputeFractureStatistics(lines, threshold, offset):
     data = []
     #offset = 20
@@ -731,7 +785,7 @@ def ComputeFractureStatistics(lines, threshold, offset):
             
             length = 0
             for row in box:
-                length_line = computeDistance(row[0],row[1],row[2],row[3])
+                length_line = compute_distance(row[0],row[1],row[2],row[3])
                 if length_line > 1:
                     length += length_line
                   
