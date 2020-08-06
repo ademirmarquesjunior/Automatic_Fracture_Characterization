@@ -69,48 +69,85 @@ horizontal_slider = sg.Slider(
 
 layout = [[sg.Menu(menu_def, tearoff=True)],
           [main_canvas, vertical_slider,
-                        sg.Frame("Image processing", [
-                # [sg.Frame("Load file", [[sg.Input(), sg.FileBrowse(),sg.Button('Load File')]] ) ],
-                [sg.Frame("Blur", [[sg.Text('Kernel:'), sg.InputCombo(('3', '5', '7', '9', '11', '13', '15'), key='_Cb_kernel_smooth_' ), sg.InputCombo(('Mean', 'Median', 'Gaussian', 'Bilateral'), key='_Cb_Smooth_'), sg.Button('Blur', key='_Bt_Smooth_', disabled=True)]] ) ],
+           sg.Frame("Image processing", [
+                [sg.Frame("Blur", [
+                    [sg.Text('Kernel:'),
+                     sg.InputCombo(('3', '5', '7', '9', '11', '13', '15'),
+                                   key='_Cb_kernel_smooth_'),
+                     sg.InputCombo(('Mean', 'Median', 'Gaussian', 'Bilateral'),
+                                   key='_Cb_Smooth_'),
+                     sg.Button('Blur', key='_Bt_Smooth_', disabled=True)]])],
+
                 [sg.Frame("1-pixel extraction", [[
-                        sg.Frame("Bordas", [[sg.Button('Canny', key="_Bt_Canny_", disabled=True)]] ), 
-                        sg.Frame("Skeleton", [[ sg.Frame("Thresholding", [[sg.InputCombo(('Sauvola', 'Niblack'), key='_Cb_threshold_'),sg.Button('Threshold', key='_Bt_threshold_', disabled=True)]] ), sg.Frame("Skeletonization", [[sg.InputCombo(('Lee'), size=(5,1)),sg.Button('Skeleton', key='_Bt_skeleton_', disabled=True)]] ) ]] ) ]] ) ],
-                
+                    sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
+                                                 disabled=True)]]),
+                    sg.Frame("Skeleton", [[
+                        sg.Frame("Thresholding",
+                                 [[sg.InputCombo(('Sauvola', 'Niblack'),
+                                                 key='_Cb_threshold_'),
+                                   sg.Button('Threshold', key='_Bt_threshold_',
+                                             disabled=True)]]),
+                        sg.Frame("Skeletonization", [[
+                            sg.InputCombo(('Lee'), size=(5, 1)),
+                            sg.Button('Skeleton', key='_Bt_skeleton_',
+                                      disabled=True)]])]])]])],
+
                 [sg.Frame("Hough transform", [
-                 [sg.Text('Threshold'), sg.Slider(range=(1, 100), orientation='h', size=(10, 10), default_value=33, key = "_Sl_threshold_"),
-                         sg.Button('Hough', key='_Bt_hough_', disabled=True)],
-          
-                        [sg.Text('Min'), sg.Slider(range=(2, 50), orientation='h', size=(10, 10), default_value=2, key = "_Sl_min_"),
-                         sg.Text('Max'), sg.Slider(range=(2, 50), orientation='h', size=(10, 10), default_value=2, key = "_Sl_max_")],
+                    [sg.Text('Threshold'), sg.Slider(range=(1, 100),
+                                                     orientation='h',
+                                                     size=(10, 10),
+                                                     default_value=33,
+                                                     key="_Sl_threshold_"),
+                     sg.Button('Hough', key='_Bt_hough_', disabled=True)],
+                    [sg.Text('Min'),
+                     sg.Slider(range=(2, 50), orientation='h', size=(10, 10),
+                               default_value=2, key="_Sl_min_"),
+                     sg.Text('Max'),
+                     sg.Slider(range=(2, 50), orientation='h', size=(10, 10),
+                               default_value=2, key="_Sl_max_")],
                          ]),
-                #sg.Frame("Line detection", [
-                 #[sg.Button("LSD", disabled=True)]])
-                ],
+                 ],
                 [sg.Frame("Connecting lines", [
-                 [sg.Text('radius'), sg.Slider(range=(1, 100), orientation='h', size=(10, 10), default_value=50, key = "_Sl_radius_"),
-                         sg.InputCombo(('alpha', 'beta', 'distance', 'deviation'), key='_Cb_mode_'), sg.Button('Connect', key='_Bt_connect_', disabled=True)],
-          
-                        [sg.Text('alpha'), sg.Slider(range=(0, 180), orientation='h', size=(10, 10), default_value=120, key = "_Sl_alpha_"),
-                         sg.Text('beta'), sg.Slider(range=(0, 180), orientation='h', size=(10, 10), default_value=90, key = "_Sl_beta_")],
-                         ])],
+                 [sg.Text('radius'),
+                  sg.Slider(range=(1, 100), orientation='h', size=(10, 10),
+                            default_value=50, key="_Sl_radius_"),
+                  sg.InputCombo(('alpha', 'beta', 'distance', 'deviation'),
+                                key='_Cb_mode_'),
+                  sg.Button('Connect', key='_Bt_connect_', disabled=True)],
+                 [sg.Text('alpha'), sg.Slider(range=(0, 180), orientation='h',
+                                              size=(10, 10), default_value=120,
+                                              key="_Sl_alpha_"),
+                  sg.Text('beta'), sg.Slider(range=(0, 180), orientation='h',
+                                             size=(10, 10), default_value=90,
+                                             key="_Sl_beta_")],
+                 ])],
                 [sg.Frame("Directional statistics", [
-                 [sg.Text('Method'), sg.InputCombo(('points', 'vertices'), key = '_Cb_method_'), sg.Text('Regression'), sg.InputCombo(('PCA', 'linear'), key = '_Cb_regression_'), sg.Button('Rosechart', key='_Bt_rosechart_', disabled=True)]
-                         ])],
+                 [sg.Text('Method'),
+                  sg.InputCombo(('points', 'vertices'), key='_Cb_method_'),
+                  sg.Text('Regression'), sg.InputCombo(('PCA', 'linear'),
+                                                       key='_Cb_regression_'),
+                  sg.Button('Rosechart', key='_Bt_rosechart_', disabled=True)]
+                 ])],
                 [sg.Frame("Fracture statistics - intensity/spacing", [
-                 [sg.Text('Box size'), sg.Input(key='_In_size_', size=(5,5)), sg.InputCombo(('pixels', 'meters'), key = '_Cb_measure_'), sg.InputCombo(('raster', 'svg'), key = '_Cb_output_'), sg.Button('Process', key='_Bt_fracture_statistics_', disabled=True)]
-                         ])],
-                #[sg.Frame("Fracture statistics", [
-                 #[sg.Input(key='_In_point0_', size=(20,10)),sg.Input(key='_In_point1_', size=(20,10)), sg.Button('Scanline', key='_Bt_scanline_', disabled=True)],
-                 #[sg.Multiline(default_text="", key="_Mt_positions_"), sg.Button('Draw points', key='_Bt_positions_')]
-
-                         #])],
-
+                 [sg.Text('Box size'), sg.Input(key='_In_size_', size=(5, 5)),
+                  sg.InputCombo(('pixels', 'meters'), key='_Cb_measure_'),
+                  sg.InputCombo(('raster', 'svg'), key='_Cb_output_'),
+                  sg.Button('Process', key='_Bt_fracture_statistics_',
+                            disabled=True)]
+                 ])],
+                # [sg.Frame("Fracture statistics", [
+                # [sg.Input(key='_In_point0_', size=(20,10)),
+                # sg.Input(key='_In_point1_', size=(20,10)),
+                # sg.Button('Scanline', key='_Bt_scanline_', disabled=True)],
+                # [sg.Multiline(default_text="", key="_Mt_positions_"),
+                # sg.Button('Draw points', key='_Bt_positions_')]
+                # ])],
 
                 ])
-        ],
+           ],
           [horizontal_slider],
           load_buttons,
-           [sg.Text('                                                                                                          ', key="_Tx_position_", auto_size_text=True)]
+          [sg.Text('', key="_Tx_position_", auto_size_text=True)]
           ]
 
 window = sg.Window('Fraturas', layout)
