@@ -200,7 +200,9 @@ def bresenham_march(image, p1, p2):
         or y2 >= image.shape[1]
     ):  # tests if line is in image, necessary because some part of the line
         # must be inside, it respects the case that the two points are outside
-        if not cv2.clipLine((0, 0, image.shape[0], image.shape[1]), p1, p2):
+        # aux = cv2.clipLine((0, 0, image.shape[0], image.shape[1]), p1, p2)[0]
+        aux = True
+        if aux is False:
             print("not in region")
             return
 
@@ -245,116 +247,186 @@ def bresenham_march(image, p1, p2):
 
 
 ##########################################################################    
-#Connect lines that end close to each other adding new lines between them
+# Connect lines that end close to each other adding new lines between them
 def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     n = np.shape(lines)[0] #Number of lines
     connections = np.zeros((n,n), dtype = bool) #Matrix of connections between all segments, starting with false
-    count = np.zeros((n), dtype = np.int)
+    count = np.zeros((n), dtype = np.int) 
     new_lines = [] #List of new segments to be added later
     
     ##########################################################################    
-    #Given a reference point(vertice), finds anther close segments
-    def checkAround2(lines, vertice, index, window): # O calculo do ângulo entre duas retas precisa ser atuaizado
-        #if window % 2 == 0: # Transforms the window to a odd size
-        #    window = window + 1
-        #offset = int(window/2) # This is used to centralize the clipline window
-        offset = window
-        segm = list()
-        for j in range(0,n):
+    
+    def checkAround2(lines, vertice, index, offset):
+        '''
+        # Given a reference point(vertice), finds anther close segments
+        # O calculo do ângulo entre duas retas precisa ser atualizado
+
+        Parameters
+        ----------
+        lines : TYPE
+            Data of previous lines detected.
+        vertice : TYPE
+            Given a line reference is the position of one of its vertex.
+        index : TYPE
+            Refer to wich line in the lines is used as reference.
+        offset : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        new_segment : tuple
+            Coordinates of the link segment.
+
+        '''
+
+        candidate_segm_list = list()  # list of segment candidates
+
+        for j in range(0, n):
             if j != index and count[j] != 2:
-                if checkConnection(connections, index, j):
-                    return False
-                dist1 = compute_distance(vertice[0], vertice[1], lines[j][0], lines[j][1])
-                dist2 = compute_distance(vertice[0], vertice[1], lines[j][2], lines[j][3])
-                aux = False
+                if check_connection(connections, index, j):
+                    return False  # If a conection has been made before, exit
+
+                # Compute distances between the reference point and the lines
+                # vertices
+                dist1 = compute_distance(vertice[0], vertice[1], lines[j][0],
+                                         lines[j][1])
+                dist2 = compute_distance(vertice[0], vertice[1], lines[j][2],
+                                         lines[j][3])
+
+                # If one of the vertexes of a segment are within offset
+                # distance add its index to candidate list
                 if dist1 <= offset or dist2 <= offset:
-                    aux = True
-                #aux = cv2.clipLine((vertice[0]-offset, vertice[1]-offset, window, window), (lines[j][0],lines[j][1]), (lines[j][2],lines[j][3]))
-                if aux != False:
-                    segm.append(j) # Save the lines indexes
-        if np.size(segm) == 0:
+                    candidate_segm_list.append(j)
+
+        if np.size(candidate_segm_list) == 0:  # If candidate list is empty
             return False
-        else:
-            link = []
-            for k in segm:
+        else:  # Filter candidate segments for linking and add link segments
+
+            candidate_link_list = []
+
+            for k in candidate_segm_list:
                 alpha = compare_angles(vertice, lines[index], lines[k])
-                if alpha[0] >= alpha_limit: # and alpha[1] > 1
-                    new_segm = [int(vertice[0]), int(vertice[1]), int(alpha[2]), int(alpha[3])]
+                if alpha[0] >= alpha_limit:  # and alpha[1] > 1
+                    new_segm = [int(vertice[0]), int(vertice[1]),
+                                int(alpha[2]), int(alpha[3])]  # 0, 1, 2, 3
                     beta = compare_angles(vertice, lines[index], new_segm)
                     if beta[0] >= beta_limit:
                         length = sd = 0
-                        new_segm.append(alpha[0])
-                        new_segm.append(beta[0])
+                        new_segm.append(alpha[0])  # 4
+                        new_segm.append(beta[0])  # 5
                         if mode == 'distance':
-                            length = compute_distance(new_segm[0], new_segm[1], new_segm[2], new_segm[3])
-                        new_segm.append(length)
-                        if mode == 'deviation':
-                            pixels = bresenham_march(image, (new_segm[0],new_segm[1]), (new_segm[2],new_segm[3]))
-                            #print(pixels)
-                            sd = np.median(pixels)# + np.std(pixels)
-                        new_segm.append(sd)
-                        new_segm.append(k)
-                        link.append(new_segm)               
-            if np.size(link) != 0:
-                link = np.asarray(link).flatten().reshape((int(np.size(link)/9),9))
-                if mode == 'alpha': # greater alpha
-                    row = np.where(link[:,4] == np.amax(link[:,4]))[0][0]
-                if mode == 'beta': # greater beta
-                    row = np.where(link[:,5] == np.amax(link[:,5]))[0][0]
-                if mode == 'distance': # minor distance
-                    row = np.where(link[:,6] == np.amin(link[:,6]))[0][0]
-                if mode == 'deviation': # minor deviation
-                    row = np.where(link[:,6] == np.amin(link[:,6]))[0][0]
-                    
-                
-                return (link[row][0], link[row][1], link[row][2], link[row][3], link[row][8])
-                
+                            length = compute_distance(new_segm[0], new_segm[1],
+                                                      new_segm[2], new_segm[3])
+                        new_segm.append(length)  # 6
+                        # if mode == 'deviation':
+                        pixels = bresenham_march(image, (new_segm[0],
+                                                         new_segm[1]),
+                                                 (new_segm[2], new_segm[3]))
+                        print(pixels)
+                        sd = np.median(pixels) + np.std(pixels)
+                        new_segm.append(sd)  # 7
+                        new_segm.append(k)  # 8
+                        candidate_link_list.append(new_segm)
+
+            if np.size(candidate_link_list) != 0:
+                candidate_link_list = np.asarray(
+                    candidate_link_list).flatten().reshape((int(np.size(
+                        candidate_link_list)/9), 9))
+                if mode == 'alpha':  # greater alpha
+                    row = np.where(candidate_link_list[:, 4] == np.amax(
+                        candidate_link_list[:, 4]))[0][0]
+                if mode == 'beta':  # greater beta
+                    row = np.where(candidate_link_list[:, 5] == np.amax(
+                        candidate_link_list[:, 5]))[0][0]
+                if mode == 'distance':  # minor distance
+                    row = np.where(candidate_link_list[:, 6] == np.amin(
+                        candidate_link_list[:, 6]))[0][0]
+                if mode == 'deviation':  # minor deviation
+                    row = np.where(candidate_link_list[:, 6] == np.amin(
+                        candidate_link_list[:, 6]))[0][0]
+
+                print(candidate_link_list)
+                print(row)
+
+                return (candidate_link_list[row][0],
+                        candidate_link_list[row][1],
+                        candidate_link_list[row][2],
+                        candidate_link_list[row][3],
+                        candidate_link_list[row][8])
+
                 '''
-                pixels = bresenham_march(image, (int(link[row][0]), int(link[row][1])), (int(link[row][2]), int(link[row][3])))    
-                
+                pixels = bresenham_march(image, (int(candidate_link_list[row][0]), int(candidate_link_list[row][1])), (int(candidate_link_list[row][2]), int(candidate_link_list[row][3])))    
+
                 if np.size(pixels) == 0:
-                    return (link[row][0], link[row][1], link[row][2], link[row][3], link[row][8]) 
+                    return (candidate_link_list[row][0], candidate_link_list[row][1], candidate_link_list[row][2], candidate_link_list[row][3], candidate_link_list[row][8]) 
                 if np.size(pixels) == 1:
-                    ends = pixels[0]    
+                    ends = pixels[0]
                 else:
                     plt.plot(pixels)
                     plt.show()
                     ends = ((pixels[0]+pixels[-1])/2) + 10
                     print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
-                 
-                 
+
                 if np.size(pixels) > 1:
                     plt.plot(pixels)
                     plt.show()
                     print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
-                    
+
                 if np.var(pixels) < 200:
                     #print(np.size(pixels), np.mean(pixels), np.median(pixels), np.std(pixels))
                     #print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
                     #plt.plot(pixels)
                     #plt.show()
-                    return (link[row][0], link[row][1], link[row][2], link[row][3], link[row][8])
+                    return (candidate_link_list[row][0], candidate_link_list[row][1], candidate_link_list[row][2], candidate_link_list[row][3], candidate_link_list[row][8])
                 else:
                     return False '''
             else:
                 return False
-            
 
-        
-    
-    ##########################################################################    
-    #Check if a connection exists between two lines. If is True in the matrix of connections
     @jit(nopython=True)
-    def checkConnection(connections, line1, line2):
+    def check_connection(connections, line1, line2):
+        '''
+        # Check if a connection between two lines already exists
+
+        Parameters
+        ----------
+        connections : Array of bool
+            Boolean matrix of connected lines.
+        line1 : int
+            Index of the first line.
+        line2 : int
+            Index of the second line.
+
+        Returns
+        -------
+        bool
+            Returns true if a connection exits and false otherwise.
+
+        '''
         index = [line1, line2]
         index.sort()
         return connections[index[0]][index[1]]
-    
-    
-    ##########################################################################    
-    #Make a connection in the matrix of connections True
+
     @jit(nopython=True)
-    def addConnection(connections, line1, line2):
+    def add_connection(connections, line1, line2):
+        '''
+        # Mark two lines as connected
+
+        Parameters
+        ----------
+        connections : Array of bool
+            Boolean matrix of connected lines.
+        line1 : int
+            Index of the first line.
+        line2 : int
+            Index of the second line.
+
+        Returns
+        -------
+        connections: Array of bool
+            Boolean matrix of connected lines.
+
+        '''
         index = [line1, line2]
         index.sort()
         connections[index[0]][index[1]] = True
@@ -368,7 +440,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
         segm = checkAround2(lines, vertice, index, window)
         if type(segm) == tuple:
             aux = list((segm[0], segm[1], segm[2], segm[3]))
-            addConnection(connections, index, int(segm[4]))
+            add_connection(connections, index, int(segm[4]))
             count[index] += 1
             new_lines = np.insert(new_lines, np.shape(new_lines)[0] ,aux, axis = 0)
             return new_lines
@@ -448,7 +520,7 @@ def compare_angles(base, line1, line2):
                 angle = 0
             if (aux) < 0:
                 angle = 180
-        return (angle, dist1, line2[2], line2[3])    
+        return (angle, dist1, line2[2], line2[3])
 
 
 def findIntersection(line1, line2):
