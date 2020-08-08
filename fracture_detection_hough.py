@@ -491,15 +491,17 @@ def compare_angles(base, line1, line2):
         px, py = [line1[2], line1[3]]
     else:
         px, py = [line1[0], line1[1]]
-        
-    dist0 = compute_distance(x0,y0,line2[0],line2[1])
-    dist1 = compute_distance(x0,y0,line2[2],line2[3])
-    
+
+    dist0 = compute_distance(x0, y0, line2[0], line2[1])
+    dist1 = compute_distance(x0, y0, line2[2], line2[3])
+
     if dist0 < dist1:
         px = px - x0
         py = py - y0
         qx, qy = [line2[2] - x0, line2[3] - y0]
-        aux = ((px*qx) + (py*qy))/(math.sqrt(math.pow(px,2) + math.pow(py,2))*math.sqrt(math.pow(qx,2) + math.pow(qy,2)))
+        aux = ((px*qx) + (py*qy))/(math.sqrt(
+            math.pow(px, 2) + math.pow(py, 2))*math.sqrt(math.pow(qx, 2) +
+                                                         math.pow(qy, 2)))
         try:
             angle = math.acos(aux)*180/math.pi
         except:
@@ -512,7 +514,9 @@ def compare_angles(base, line1, line2):
         px = px - x0
         py = py - y0
         qx, qy = [line2[0] - x0, line2[1] - y0]
-        aux = ((px*qx) + (py*qy))/(math.sqrt(math.pow(px,2) + math.pow(py,2))*math.sqrt(math.pow(qx,2) + math.pow(qy,2)))
+        aux = ((px*qx) + (py*qy))/(math.sqrt(
+            math.pow(px, 2) + math.pow(py, 2))*math.sqrt(math.pow(qx, 2) +
+                                                         math.pow(qy, 2)))
         try:
             angle = math.acos(aux)*180/math.pi
         except:
@@ -526,10 +530,11 @@ def compare_angles(base, line1, line2):
 def findIntersection(line1, line2):
     x0, y0, x1, y1 = line1
     x2, y2, x3, y3 = line2
-    
-    if dointersect(point(x0,y0),point(x1,y1), point(x2,y2), point(x3,y3)) == False:
+
+    if dointersect(
+            point(x0, y0), point(x1, y1), point(x2, y2), point(x3, y3)) == False:
         return False
-    
+
     try:
         denom = float((x0 - x1) * (y2 - y3) - (y0 - y1) * (x2 - x3))
         x = ((x0 * y1 - y0 * x1) * (x2 - x3) - (x0 - x1) * (x2 * y3 - y2 * x3)) / denom
