@@ -243,19 +243,13 @@ def bresenham_march(image, p1, p2):
     return ret
 
 
-
-
-
-##########################################################################    
-# Connect lines that end close to each other adding new lines between them
 def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
-    n = np.shape(lines)[0] #Number of lines
-    connections = np.zeros((n,n), dtype = bool) #Matrix of connections between all segments, starting with false
-    count = np.zeros((n), dtype = np.int) 
-    new_lines = [] #List of new segments to be added later
-    
-    ##########################################################################    
-    
+    # Connect lines that end close to each other adding new lines between them
+    n = np.shape(lines)[0]  # Number of lines
+    connections = np.zeros((n, n), dtype=bool)  # Matrix of connections between all segments, starting with false
+    count = np.zeros((n), dtype=np.int)
+    new_lines = []  # List of new segments to be added later
+
     def checkAround2(lines, vertice, index, offset):
         '''
         # Given a reference point(vertice), finds anther close segments
@@ -322,7 +316,15 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                         pixels = bresenham_march(image, (new_segm[0],
                                                          new_segm[1]),
                                                  (new_segm[2], new_segm[3]))
-                        print(pixels)
+                        # print(pixels)
+                        if False:  # np.size(pixels) > 10
+                            plt.title(str(np.mean(pixels))+" "+str(
+                                np.std(pixels)))
+                            plt.plot(pixels)
+                            plt.show()
+                            print(np.mean(pixels), (pixels[0]+pixels[-1])/2,
+                                  np.var(pixels))
+
                         sd = np.median(pixels) + np.std(pixels)
                         new_segm.append(sd)  # 7
                         new_segm.append(k)  # 8
@@ -354,32 +356,6 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                         candidate_link_list[row][3],
                         candidate_link_list[row][8])
 
-                '''
-                pixels = bresenham_march(image, (int(candidate_link_list[row][0]), int(candidate_link_list[row][1])), (int(candidate_link_list[row][2]), int(candidate_link_list[row][3])))    
-
-                if np.size(pixels) == 0:
-                    return (candidate_link_list[row][0], candidate_link_list[row][1], candidate_link_list[row][2], candidate_link_list[row][3], candidate_link_list[row][8]) 
-                if np.size(pixels) == 1:
-                    ends = pixels[0]
-                else:
-                    plt.plot(pixels)
-                    plt.show()
-                    ends = ((pixels[0]+pixels[-1])/2) + 10
-                    print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
-
-                if np.size(pixels) > 1:
-                    plt.plot(pixels)
-                    plt.show()
-                    print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
-
-                if np.var(pixels) < 200:
-                    #print(np.size(pixels), np.mean(pixels), np.median(pixels), np.std(pixels))
-                    #print(np.mean(pixels), (pixels[0]+pixels[-1])/2, np.var(pixels))
-                    #plt.plot(pixels)
-                    #plt.show()
-                    return (candidate_link_list[row][0], candidate_link_list[row][1], candidate_link_list[row][2], candidate_link_list[row][3], candidate_link_list[row][8])
-                else:
-                    return False '''
             else:
                 return False
 
@@ -451,7 +427,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     #Search for connections and save the new segments
     for i in range(0,n):
         new_lines = addSegments(i, 0, new_lines)
-        new_lines = addSegments(i, 1, new_lines)
+        # new_lines = addSegments(i, 1, new_lines)
     
     #Reshape matrix  
     new_lines = np.reshape(new_lines, (np.uint64(np.shape(new_lines)[0]/4),4))
