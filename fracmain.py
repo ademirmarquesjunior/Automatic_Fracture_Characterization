@@ -9,7 +9,7 @@ import numpy as np
 import PySimpleGUI as sg
 import fracture_detection_hough as frac
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import math
 # import pandas as pd
 
@@ -69,27 +69,38 @@ horizontal_slider = sg.Slider(
 
 layout = [[sg.Menu(menu_def, tearoff=True)],
           [main_canvas, vertical_slider,
-           sg.Frame("Image processing", [
-                [sg.Frame("Blur", [
-                    [sg.Text('Kernel:'),
-                     sg.InputCombo(('3', '5', '7', '9', '11', '13', '15'),
-                                   key='_Cb_kernel_smooth_'),
-                     sg.InputCombo(('Mean', 'Median', 'Gaussian', 'Bilateral'),
-                                   key='_Cb_Smooth_'),
-                     sg.Button('Blur', key='_Bt_Smooth_', disabled=True)]])],
+           sg.Frame("", [
+                [sg.Frame("Image processing", [
+                    [sg.Text('Filter size'),
+                     sg.Radio('3', "RADIO1"),
+                     sg.Radio('5', "RADIO1"),
+                     sg.Radio('7', "RADIO1", default=True),
+                     sg.Radio('9', "RADIO1"),
+                     sg.Radio('11', "RADIO1"),
+                     sg.Radio('13', "RADIO1")],
+                    [sg.Text('Filter mode'),
+                     sg.Radio('Mean', "RADIO2"),
+                     sg.Radio('Median', "RADIO2", default=True),
+                     sg.Radio('Gaussian', "RADIO2"),
+                     sg.Radio('Bilateral', "RADIO2"),
+                     ],
+                    [sg.Text('Adaptative thresholding'),
+                     sg.Radio('Sauvola', "RADIO3", default=True),
+                     sg.Radio('Niblack', "RADIO3"),
+                     sg.Radio('Phansalkar', "RADIO3", disabled=True),
+                     ],
+                    [sg.Text('Skeletonization'),
+                     sg.Radio('Lee', "RADIO4", default=True),
+                     sg.Radio('Zhang', "RADIO4", disabled=True),
+                     sg.Radio
+                     ],
+                    [sg.Button('Image processing', key='_Bt_processing_',
+                               disabled=True,
+                               size=(50, 1)), ]])],
 
-                [
-                    sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
-                                                 disabled=True)]]),
-                    sg.Frame("Thresholding",
-                             [[sg.InputCombo(('Sauvola', 'Niblack'),
-                                             key='_Cb_threshold_'),
-                               sg.Button('Threshold', key='_Bt_threshold_',
-                                         disabled=True)]]),
-                    sg.Frame("Skeletonization", [[
-                            sg.InputCombo(('Lee'), size=(5, 1)),
-                            sg.Button('Skeleton', key='_Bt_skeleton_',
-                                      disabled=True)]])],
+                # [
+                #     sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
+                #                                  disabled=True)]]), ],
 
                 [sg.Frame("Hough transform", [
                     [sg.Text('Threshold'), sg.Slider(range=(1, 100),
@@ -230,7 +241,7 @@ while True:
                 image = cv2.imdecode(np.frombuffer(file, np.uint8), 0)
                 # temp = image
                 temp = updateCanvas(image, hor, ver)
-                window.Element("_Bt_Smooth_").Update(disabled=False)
+                window.Element("_Bt_processing_").Update(disabled=False)
                 window.Element("_Bt_original_").Update(disabled=False)
                 window.Element("_Tx_position_").Update(value=str(
                     dataset.crs)+" "+str(dataset.bounds.left,
@@ -266,63 +277,59 @@ while True:
             window.Element("_Tx_position_").Update(value=str((position[0],
                                                               position[1])))
 
-    elif event == '_Bt_Smooth_':
+    elif event == '_Bt_processing_':
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
-        kernel = int(values['_Cb_kernel_smooth_'])
         sigma = 0
-        if values['_Cb_Smooth_'] == 'Mean':
-            smooth = cv2.blur(image, (kernel, kernel))
-        if values['_Cb_Smooth_'] == 'Median':
-            smooth = cv2.medianBlur(image, kernel)
-        if values['_Cb_Smooth_'] == 'Gaussian':
-            smooth = cv2.GaussianBlur(image, (kernel, kernel), sigma)
-        if values['_Cb_Smooth_'] == 'Bilateral':
-            smooth = cv2.bilateralFilter(image, kernel, 75, 75)
-        temp = updateCanvas(smooth, hor, ver)
-        cv2.imwrite("smooth.png", smooth)
-        window.Element("_Bt_Canny_").Update(disabled=False)
-        window.Element("_Bt_threshold_").Update(disabled=False)
-        window.Element("_Bt_smoothed_").Update(disabled=False)
-    elif event == '_Bt_Canny_':
-        hor = int(values["_Sl_horizontal_"])
-        ver = int(values["_Sl_vertical_"])
-        onepixel = frac.auto_canny(smooth)
-        cv2.imwrite("canny.png", onepixel)
-        temp = updateCanvas(onepixel, hor, ver)
-        window.Element("_Bt_hough_").Update(disabled=False)
-        window.Element("_Bt_thinned_").Update(disabled=False)
-    elif event == '_Bt_threshold_':
-        hor = int(values["_Sl_horizontal_"])
-        ver = int(values["_Sl_vertical_"])
-        if values['_Cb_threshold_'] == 'Sauvola':
-            # import fracture_detection_hough as frac
-            start = timeit.timeit()
-            threshold = frac.adaptative_thresholding(smooth, 31, 'sauvola')
-            end = timeit.timeit()
-            print((end - start)*100)
+        kernel = 3
+        filter_method = ''
 
-        if values['_Cb_threshold_'] == 'Niblack':
-            start = timeit.timeit()
+        if values[1] is True:
+            kernel = 3
+        if values[2] is True:
+            kernel = 5
+        if values[3] is True:
+            kernel = 7
+        if values[4] is True:
+            kernel = 9
+        if values[5] is True:
+            kernel = 11
+        if values[6] is True:
+            kernel = 13
+
+        if values[7] is True:
+            smooth = cv2.blur(image, (kernel, kernel))
+        if values[8] is True:
+            smooth = cv2.medianBlur(image, kernel)
+        if values[9] is True:
+            smooth = cv2.GaussianBlur(image, (kernel, kernel), sigma)
+        if values[10] is True:
+            smooth = cv2.bilateralFilter(image, kernel, 75, 75)
+
+        if values[11] is True:
+            threshold = frac.adaptative_thresholding(smooth, 31, 'sauvola')
+        if values[12] is True:
             threshold = frac.adaptative_thresholding(smooth, 31, 'niblack')
-            end = timeit.timeit()
-            print((end - start)*100)
-            # frac.show_image(threshold)
-        temp = updateCanvas(threshold, hor, ver)
+        if values[13] is True:
+            threshold = frac.adaptative_thresholding(smooth, 31, 'phansalkar')
+
+        if values[14] is True:
+            onepixel = frac.skeletonize_image(threshold, True, 'lee')
+        if values[15] is True:
+            onepixel = frac.skeletonize_image(threshold, True, 'lee')
+
+        temp = updateCanvas(cv2.bitwise_not(onepixel), hor, ver)
+
+        cv2.imwrite("smooth.png", smooth)
         cv2.imwrite("threshold.png", threshold)
-        window.Element("_Bt_skeleton_").Update(disabled=False)
+        cv2.imwrite("skeleton.png", cv2.bitwise_not(onepixel))
+
+        window.Element("_Bt_smoothed_").Update(disabled=False)
         window.Element("_Bt_thresholded_").Update(disabled=False)
-        sg.Popup('Threshold finished')
-    elif event == '_Bt_skeleton_':
-        hor = int(values["_Sl_horizontal_"])
-        ver = int(values["_Sl_vertical_"])
-        # if values['_Cb_threshold_'] == 'Lee':
-        onepixel = frac.skeletonize_image(threshold, True, 'lee')
-        # temp = onepixel
-        temp = updateCanvas(onepixel, hor, ver)
-        cv2.imwrite("skeleton.png", onepixel)
         window.Element("_Bt_hough_").Update(disabled=False)
         window.Element("_Bt_thinned_").Update(disabled=False)
+        sg.Popup('Image processing finished')
+
     elif event == '_Bt_hough_':
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
@@ -559,7 +566,7 @@ while True:
     elif event == '_Bt_thresholded_':
         temp = updateCanvas(threshold, hor, ver)
     elif event == '_Bt_thinned_':
-        temp = updateCanvas(onepixel, hor, ver)
+        temp = updateCanvas(cv2.bitwise_not(onepixel), hor, ver)
     elif event == '_Bt_lined_':
         temp = updateCanvas(houghlines, hor, ver)
     elif event == '_Bt_connected_':
@@ -572,7 +579,7 @@ while True:
         temp = updateCanvas(intensity, hor, ver)
     elif event == '_Bt_spacing_plot_':
         temp = updateCanvas(spacing, hor, ver)
-    # print(event, values)
+    print(event, values)
 
 window.Close()
 
