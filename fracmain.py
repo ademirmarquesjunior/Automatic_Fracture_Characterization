@@ -184,9 +184,9 @@ while True:
 
         temp = updateCanvas(cv2.bitwise_not(onepixel), hor, ver)
 
-        cv2.imwrite("smooth.png", smooth)
-        cv2.imwrite("threshold.png", threshold)
-        cv2.imwrite("skeleton.png", cv2.bitwise_not(onepixel))
+        cv2.imwrite("temp/smooth.png", smooth)
+        cv2.imwrite("temp/threshold.png", threshold)
+        cv2.imwrite("temp/skeleton.png", 255-onepixel)
 
         window.Element("_Bt_smoothed_").Update(disabled=False)
         window.Element("_Bt_thresholded_").Update(disabled=False)
@@ -210,7 +210,7 @@ while True:
                                     smooth)
         # temp = houghlines
         temp = updateCanvas(houghlines, hor, ver)
-        cv2.imwrite("hough.png", houghlines)
+        cv2.imwrite("temp/hough.png", houghlines)
         window.Element("_Bt_lined_").Update(disabled=False)
         window.Element("_Bt_connect_").Update(disabled=False)
 
@@ -236,12 +236,12 @@ while True:
         # frac.show_image(cv2.addWeighted(connectionlines, 0.4, cv2.cvtColor(
         #   smooth, cv2.COLOR_GRAY2BGR), 0.5, 0.0))
 
-        cv2.imwrite("connected3.png", connectionlines)
+        cv2.imwrite("temp/connected3.png", connectionlines)
         # connectionlines = cv2.addWeighted(connectionlines, 0.4,
         #                   cv2.cvtColor(smooth, cv2.COLOR_GRAY2BGR), 0.5, 0.0)
 
         temp = updateCanvas(connectionlines, hor, ver)
-        # cv2.imwrite("connected.png", connectionlines)
+        # cv2.imwrite("temp/connected.png", connectionlines)
         sg.Popup('Connections finished')
         window.Element("_Bt_connected_").Update(disabled=False)
         window.Element("_Bt_rosechart_").Update(disabled=False)
@@ -263,7 +263,7 @@ while True:
 
         pca_lines = frac.drawLines(regression_lines, segm_group_angles, (
             np.shape(image)[0], np.shape(image)[1], 3), image)
-        cv2.imwrite('pca_lines.png', pca_lines)
+        cv2.imwrite('temp/pca_lines.png', pca_lines)
 
         # frac.show_image()
         # plt.hist(segm_group_angles[:,1])
@@ -274,14 +274,14 @@ while True:
                                                                image)[1], 3),
                                          smooth)
 
-        cv2.imwrite('groups.png', segmgroups)
+        cv2.imwrite('temp/groups.png', segmgroups)
 
         # frac.show_image(segmgroups)
 
         window.Element("_Sl_horizontal_").Update(value=0)
         window.Element("_Sl_vertical_").Update(value=0)
         plot = frac.rosechartPlot(segm_group_angles[:, 0], 'Rosechart')
-        cv2.imwrite('plot.png', plot)
+        cv2.imwrite('temp/plot.png', plot)
         plot = cv2.resize(plot, (500, 500))
         temp = updateCanvas(plot, 0, 0)
         window.Element("_Bt_groups_").Update(disabled=False)
@@ -328,14 +328,14 @@ while True:
 
         if values['_Cb_output_'] == 'svg':
             import svgwrite
-            dwg = svgwrite.Drawing('intensity.svg', profile='tiny')
+            dwg = svgwrite.Drawing('temp/intensity.svg', profile='tiny')
             intensity = frac.fractureAreaPlot(data, intensity_max, dwg, 'svg',
                                               'intensity')
             frac.barColor(intensity_max, 40, 350, dwg, "Intensity")
             frac.boxScale(20, 50, 500, dwg)
             dwg.save()
 
-            dwg = svgwrite.Drawing('spacing.svg', profile='tiny')
+            dwg = svgwrite.Drawing('temp/spacing.svg', profile='tiny')
             spacing = frac.fractureAreaPlot(data, boxsize, dwg, 'svg',
                                             'spacing')
             frac.barColor(intensity_max, 40, 350, dwg, "Spacing")
@@ -349,7 +349,7 @@ while True:
                                               'raster', 'intensity')
             intensity = frac.drawLines(connected_lines, angles2, image,
                                        image=intensity, mode='black')
-            cv2.imwrite('intensity.png', intensity)
+            cv2.imwrite('temp/intensity.png', intensity)
             intensity = cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB)
             # frac.show_image(cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB))
 
@@ -358,7 +358,7 @@ while True:
             spacing = frac.drawLines(connected_lines, angles2, image,
                                      image=spacing, mode='black')
 
-            cv2.imwrite('spacing.png', spacing)
+            cv2.imwrite('temp/spacing.png', spacing)
             spacing = cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB)
             # frac.show_image(cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB))
 
@@ -371,7 +371,7 @@ while True:
                         intensity_area[i, j] = [0, 0, 0]
 
             # frac.show_image(cv2.cvtColor(intensity_area, cv2.COLOR_BGR2RGB))
-            cv2.imwrite('intensity_area.png', intensity_area)
+            cv2.imwrite('temp/intensity_area.png', intensity_area)
 
             temp = updateCanvas(intensity, hor, ver)
 
