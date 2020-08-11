@@ -308,13 +308,10 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                                 int(alpha[2]), int(alpha[3])]  # 0, 1, 2, 3
                     beta = compare_angles(vertice, lines[index], new_segm)
                     if beta[0] >= beta_limit:
-                        length = sd = 0
-                        new_segm.append(alpha[0])  # 4
-                        new_segm.append(beta[0])  # 5
-                        if mode == 'distance':
-                            length = compute_distance(new_segm[0], new_segm[1],
-                                                      new_segm[2], new_segm[3])
-                        new_segm.append(length)  # 6
+                        # length = sd = 0
+                        new_segm.append(alpha[0])  # 4 : alpha angle
+                        new_segm.append(beta[0])  # 5 : beta angle
+                        new_segm.append(alpha[1])  # 6 : point distance
                         # if mode == 'deviation':
                         pixels = bresenham_march(image, (new_segm[0],
                                                          new_segm[1]),
@@ -457,7 +454,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
 def compute_distance(x0, y0, x1, y1):
     '''
-    Compute the distance between two point p and q
+    Compute the distance between two point p and q.
 
     Parameters
     ----------
@@ -481,6 +478,32 @@ def compute_distance(x0, y0, x1, y1):
 
 
 def compare_angles(base, line1, line2):
+    '''
+    Measure the angle between two lines or segments given a reference vertex.
+    Extends the closest point on line2 to the base point on line1 to measure
+    the angle.
+
+    Parameters
+    ----------
+    base : list
+        Vertex on line1 used as reference to obtain the angle.
+    line1 : list
+        First line or segment.
+    line2 : list
+        Second line or segment.
+
+    Returns
+    -------
+    angle : float
+        Angle in degrees.
+    distance : float
+        Distance to the closest point on line2 to the base point.
+    x : int
+        X position of the closest point on line2.
+    y : int
+        Y position of the closest point on line2.
+
+    '''
     x0, y0 = base
     if [line1[0], line1[1]] == [x0, y0]:
         px, py = [line1[2], line1[3]]
@@ -523,6 +546,7 @@ def compare_angles(base, line1, line2):
 
 
 def findIntersection(line1, line2):
+
     x0, y0, x1, y1 = line1
     x2, y2, x3, y3 = line2
 
@@ -733,10 +757,10 @@ def regressionGroupSegments(segm_groups, lines, mode='canvas',
             X_pca = pca.transform(data)
             X_new = pca.inverse_transform(X_pca)
 
-            # plt.scatter(data[:, 0], -data[:,1])
-            # plt.scatter(X_new[:,0], -X_new[:,1])
+            # plt.scatter(data[:, 0], -data[:, 1])
+            # plt.scatter(X_new[:, 0], -X_new[:, 1])
             # plt.show()
-            # plt.plot(X, (m*X+c)*-1, 'r--',label="Least Squares")
+            # plt.plot(X, (m*X+c)*-1, 'r--', label="Least Squares")
 
             # X_new = X_new * [1,-1]
 
