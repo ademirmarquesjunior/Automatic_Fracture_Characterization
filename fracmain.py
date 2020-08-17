@@ -115,7 +115,7 @@ while True:
             except ValueError:
                 sg.Popup(ValueError)
         except Exception as e:
-            sg.Popup('Invalid file address. '+str(e))
+            sg.Popup('Invalid file address. ' + str(e))
     elif event == '_Sl_horizontal_' or event == '_Sl_vertical_':
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
@@ -204,6 +204,7 @@ while True:
                                 minLineLength=int(values["_Sl_min_"]),
                                 maxLineGap=int(values["_Sl_max_"]))
         lines = np.reshape(lines, (np.shape(lines)[0], 4))
+        lines = np.uint(lines)
         angles = frac.getLineAngles(lines)
         houghlines = frac.drawLines(lines, angles, (np.shape(image)[0],
                                                     np.shape(image)[1], 3),
@@ -443,7 +444,7 @@ while True:
         temp = updateCanvas(intensity, hor, ver)
     elif event == '_Bt_spacing_plot_':
         temp = updateCanvas(spacing, hor, ver)
-    print(event, values)
+    # print(event, values)
 
 window.Close()
 
