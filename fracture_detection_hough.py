@@ -18,6 +18,7 @@ from skimage.morphology import skeletonize
 import colorsys
 import matplotlib.pyplot as plt
 from numba import jit
+import time
 
 # from skimage.data import binary_blobs
 # import scipy.stats as st
@@ -244,16 +245,31 @@ def bresenham_march(image, p1, p2):
 
 
 def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
+
+    # Change list of lines to list of vertices
+    line_vertices = np.reshape(lines, (int(np.size(lines)/2), 2))
+
+    indexes = np.zeros((int(np.size(lines)/2), 1), dtype=int)
+    for i in range(0, np.shape(line_vertices)[0]):
+        indexes[i] = int(i/2)  # Save lines indexes
+    line_vertices = np.append(line_vertices, indexes, -1)
+    line_vertices = np.append(line_vertices,
+                              np.zeros((int(np.size(lines)/2), 1),
+                                       dtype=int), -1)  # check list
+
+    # line_vertices = np.uint(line_vertices)
+
     # Connect lines that end close to each other adding new lines between them
-    n = np.shape(lines)[0]  # Number of lines
+    n = np.shape(line_vertices)[0]  # Number of lines
 
     # Matrix of connections between all segments, starting with false
     connections = np.zeros((n, n), dtype=bool)
 
-    count = np.zeros((n), dtype=np.int)
+    # count = np.zeros((n), dtype=np.int)
     new_lines = []  # List of new segments to be added later
+    mode = 'distance'
 
-    def checkAround2(lines, vertice, index, offset):
+    def checkAround2(lines, line_vertices, index, offset):
         '''
         # Given a reference point(vertice), finds anther close segments
         # O calculo do ângulo entre duas retas precisa ser atualizado
@@ -276,24 +292,30 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
         '''
 
-        candidate_segm_list = list()  # list of segment candidates
+        # index =2
+        # offset = 50
 
-        for j in range(0, n):
-            if j != index and count[j] != 2:
-                if check_connection(connections, index, j):
+        candidate_segm_list = list()  # list of segment candidates
+        vertice = [line_vertices[index, 0], line_vertices[index, 1]]
+
+        for j in range(0, np.shape(line_vertices)[0]):
+            if j != index:
+                if check_connection(connections, int(line_vertices[index, 2]),
+                                    int(line_vertices[j, 2])):
                     return False  # If a conection has been made before, exit
 
                 # Compute distances between the reference point and the lines
                 # vertices
-                dist1 = compute_distance(vertice[0], vertice[1], lines[j][0],
-                                         lines[j][1])
-                dist2 = compute_distance(vertice[0], vertice[1], lines[j][2],
-                                         lines[j][3])
+                dist = compute_distance(vertice[0], vertice[1],
+                                        line_vertices[j, 0],
+                                        line_vertices[j, 1])
 
                 # If one of the vertexes of a segment are within offset
                 # distance add its index to candidate list
-                if dist1 <= offset or dist2 <= offset:
-                    candidate_segm_list.append(j)
+                if dist <= offset:
+                    print(dist)
+                    print(line_vertices[j, 2])
+                    candidate_segm_list.append(line_vertices[j, 2])
 
         if np.size(candidate_segm_list) == 0:  # If candidate list is empty
             return False
@@ -302,11 +324,13 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
             candidate_link_list = []
 
             for k in candidate_segm_list:
-                alpha = compare_angles(vertice, lines[index], lines[k])
+                alpha = compare_angles(vertice, lines[line_vertices[index, 2]],
+                                       lines[k])
                 if alpha[0] >= alpha_limit:  # and alpha[1] > 1
                     new_segm = [int(vertice[0]), int(vertice[1]),
                                 int(alpha[2]), int(alpha[3])]  # 0, 1, 2, 3
-                    beta = compare_angles(vertice, lines[index], new_segm)
+                    beta = compare_angles(vertice, lines[line_vertices[
+                        index, 2]], new_segm)
                     if beta[0] >= beta_limit:
                         # length = sd = 0
                         new_segm.append(alpha[0])  # 4 : alpha angle
@@ -326,8 +350,8 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                                   np.var(pixels))
 
                         sd = np.median(pixels) + np.std(pixels)
-                        new_segm.append(sd)  # 7
-                        new_segm.append(k)  # 8
+                        new_segm.append(sd)  # 7 : pixel deviation
+                        new_segm.append(k)  # 8 : line index
                         candidate_link_list.append(new_segm)
 
             if np.size(candidate_link_list) != 0:
@@ -408,7 +432,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
         connections[index[0]][index[1]] = True
         return connections
 
-    def add_segments(index, side, new_lines):
+    def add_segments(index, line_vertices, new_lines):
         '''
         Create segments between two close segments
 
@@ -428,12 +452,15 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
         '''
 
-        vertice = list((lines[i][0+side*2], lines[i][1+side*2]))
-        segm = checkAround2(lines, vertice, index, window)
+        # vertice = list((line_vertices[index, 0], line_vertices[index, 1]))
+        segm = checkAround2(lines, line_vertices, index, window)
         if type(segm) == tuple:
             aux = list((segm[0], segm[1], segm[2], segm[3]))
-            add_connection(connections, index, int(segm[4]))
-            count[index] += 1
+
+            add_connection(connections, int(line_vertices[index, 2]),
+                           int(segm[4]))
+
+            # count[index] += 1
             new_lines = np.insert(new_lines, np.shape(new_lines)[0],
                                   aux, axis=0)
             return new_lines
@@ -441,9 +468,13 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
             return new_lines
 
     # Search for connections and save the new segments
-    for i in range(0, n):
-        new_lines = add_segments(i, 0, new_lines)
+    start = time.time()
+    for i in range(0, np.shape(line_vertices)[0]-1):
+        print("Entry: " + str(i))
+        new_lines = add_segments(i, line_vertices, new_lines)
         # new_lines = add_segments(i, 1, new_lines)
+    end = time.time()
+    print('Time: ' + str((end - start)))
 
     # Reshape array of new segments
     new_lines = np.reshape(new_lines, (np.uint64(np.shape(new_lines)[0]/4), 4))
@@ -454,7 +485,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
 def compute_distance(x0, y0, x1, y1):
     '''
-    Compute the distance between two point p and q.
+    Compute the distance between two point.
 
     Parameters
     ----------
@@ -473,6 +504,7 @@ def compute_distance(x0, y0, x1, y1):
         Distance in pixel size.
 
     '''
+
     dist = math.sqrt(math.pow((x1 - x0), 2) + math.pow((y1 - y0), 2))
     return dist
 
@@ -516,7 +548,7 @@ def compare_angles(base, line1, line2):
     if dist0 < dist1:
         px = px - x0
         py = py - y0
-        qx, qy = [line2[2] - x0, line2[3] - y0]
+        qx, qy = [float(line2[2]) - x0, float(line2[3]) - y0]
         aux = ((px*qx) + (py*qy))/(math.sqrt(
             math.pow(px, 2) + math.pow(py, 2))*math.sqrt(math.pow(qx, 2) +
                                                          math.pow(qy, 2)))
@@ -551,7 +583,8 @@ def findIntersection(line1, line2):
     x2, y2, x3, y3 = line2
 
     if dointersect(
-            point(x0, y0), point(x1, y1), point(x2, y2), point(x3, y3)) == False:
+            point(x0, y0), point(x1, y1), point(x2, y2),
+            point(x3, y3)) == False:
         return False
 
     try:
