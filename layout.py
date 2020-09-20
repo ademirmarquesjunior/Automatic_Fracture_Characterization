@@ -143,5 +143,5 @@ layout = [[sg.Menu(menu_def, tearoff=True)],
            ],
           [horizontal_slider],
           load_buttons,
-          [sg.Text('', key="_Tx_position_", auto_size_text=True)]
+          [sg.Text('                                                        ', key="_Tx_position_", auto_size_text=True)]
           ]

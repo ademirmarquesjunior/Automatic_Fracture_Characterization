@@ -1,0 +1,17 @@
+cv2
+numpy
+PySimpleGUI
+matplotlib
+math
+base64
+io
+timeit
+rasterio
+utm
+svgwrite
+sklearn
+PIL
+skimage
+colorsys
+numba
+time

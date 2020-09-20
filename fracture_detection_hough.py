@@ -9,6 +9,9 @@ import cv2
 import svgwrite
 import numpy as np
 import math
+
+import geometry as gm
+
 from sklearn.decomposition import PCA
 from PIL import Image
 from skimage.morphology import skeletonize
@@ -244,6 +247,57 @@ def bresenham_march(image, p1, p2):
     return ret
 
 
+@jit(nopython=True)
+def check_connection(connections, obj1, obj2):
+    '''
+    # Check if a connection between two objects already exists
+
+    Parameters
+    ----------
+    connections : Array of bool
+        Boolean matrix of connected objects.
+    obj1 : int
+        Index of the first object.
+    obj2 : int
+        Index of the second object.
+
+    Returns
+    -------
+    bool
+        Returns true if a connection exits and false otherwise.
+
+    '''
+    index = [obj1, obj2]
+    index.sort()
+    return connections[index[0]][index[1]]
+
+
+@jit(nopython=True)
+def add_connection(connections, obj1, obj2):
+    '''
+    # Mark a connection between two objects as True
+
+    Parameters
+    ----------
+    connections : Array of bool
+        Boolean matrix of connected objects.
+    obj1 : int
+        Index of the first object.
+    obj2 : int
+        Index of the second object.
+
+    Returns
+    -------
+    connections: Array of bool
+        Boolean matrix of connected lines.
+
+    '''
+    index = [obj1, obj2]
+    index.sort()
+    connections[index[0]][index[1]] = True
+    return connections
+
+
 def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
     # Change list of lines to list of vertices
@@ -260,16 +314,17 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     # line_vertices = np.uint(line_vertices)
 
     # Connect lines that end close to each other adding new lines between them
-    n = np.shape(line_vertices)[0]  # Number of lines
+    n = np.shape(line_vertices)[0]  # Number of vertices
 
     # Matrix of connections between all segments, starting with false
     connections = np.zeros((n, n), dtype=bool)
 
     # count = np.zeros((n), dtype=np.int)
     new_lines = []  # List of new segments to be added later
-    mode = 'distance'
+    # mode = 'distance'
+    vertice_index = list(range(n))
 
-    def checkAround2(lines, line_vertices, index, offset):
+    def checkAround2(lines, line_vertices, index, radius):
         '''
         # Given a reference point(vertice), finds anther close segments
         # O calculo do ângulo entre duas retas precisa ser atualizado
@@ -282,8 +337,8 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
             Given a line reference is the position of one of its vertex.
         index : int
             Refer to wich line in the lines table is used as reference.
-        offset : int
-            Search radius.
+        radius : int
+            Search radius size.
 
         Returns
         -------
@@ -292,30 +347,31 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
         '''
 
-        # index =2
-        # offset = 50
-
         candidate_segm_list = list()  # list of segment candidates
         vertice = [line_vertices[index, 0], line_vertices[index, 1]]
+        candidate_vertice = []
 
-        for j in range(0, np.shape(line_vertices)[0]):
-            if j != index:
-                if check_connection(connections, int(line_vertices[index, 2]),
-                                    int(line_vertices[j, 2])):
-                    return False  # If a conection has been made before, exit
+        # try:
+        #     vertice_index.remove(index)
+        # except Exception:
+        #     print(Exception)
+        #     return False
 
-                # Compute distances between the reference point and the lines
-                # vertices
-                dist = compute_distance(vertice[0], vertice[1],
-                                        line_vertices[j, 0],
-                                        line_vertices[j, 1])
+        for j in vertice_index:
+            if line_vertices[index, 2] != line_vertices[j, 2]:
+                # if check_connection(connections, int(index), int(j)) is False:
+                if True:
+                    dist = gm.compute_distance(vertice[0], vertice[1],
+                                            line_vertices[j, 0],
+                                            line_vertices[j, 1])
 
-                # If one of the vertexes of a segment are within offset
-                # distance add its index to candidate list
-                if dist <= offset:
-                    print(dist)
-                    print(line_vertices[j, 2])
-                    candidate_segm_list.append(line_vertices[j, 2])
+                    # If one of the vertexes of a segment are within offset
+                    # distance add its index to candidate list
+                    if dist <= radius:
+                        # vertice_index.remove(j)
+                        add_connection(connections, int(index), int(j))
+                        candidate_segm_list.append(line_vertices[j, 2])
+                        candidate_vertice.append(j)
 
         if np.size(candidate_segm_list) == 0:  # If candidate list is empty
             return False
@@ -323,13 +379,15 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
             candidate_link_list = []
 
-            for k in candidate_segm_list:
-                alpha = compare_angles(vertice, lines[line_vertices[index, 2]],
-                                       lines[k])
+            for l in range(0, np.shape(candidate_vertice)[0]-1):
+                k = candidate_segm_list[l]
+                alpha = gm.compare_angles(vertice,
+                                          lines[line_vertices[index, 2]],
+                                          lines[k])
                 if alpha[0] >= alpha_limit:  # and alpha[1] > 1
                     new_segm = [int(vertice[0]), int(vertice[1]),
                                 int(alpha[2]), int(alpha[3])]  # 0, 1, 2, 3
-                    beta = compare_angles(vertice, lines[line_vertices[
+                    beta = gm.compare_angles(vertice, lines[line_vertices[
                         index, 2]], new_segm)
                     if beta[0] >= beta_limit:
                         # length = sd = 0
@@ -337,11 +395,12 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                         new_segm.append(beta[0])  # 5 : beta angle
                         new_segm.append(alpha[1])  # 6 : point distance
                         # if mode == 'deviation':
-                        pixels = bresenham_march(image, (new_segm[0],
-                                                         new_segm[1]),
-                                                 (new_segm[2], new_segm[3]))
+                        pixels = 0
+                        #pixels = bresenham_march(image, (new_segm[0],
+                        #                                 new_segm[1]),
+                        #                         (new_segm[2], new_segm[3]))
                         # print(pixels)
-                        if False:  # np.size(pixels) > 10
+                        if False:  # np.size(pixels) > 10:
                             plt.title(str(np.mean(pixels))+" "+str(
                                 np.std(pixels)))
                             plt.plot(pixels)
@@ -349,11 +408,14 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                             print(np.mean(pixels), (pixels[0]+pixels[-1])/2,
                                   np.var(pixels))
 
-                        sd = np.median(pixels) + np.std(pixels)
+                        # sd = np.median(pixels) + np.std(pixels)
+                        sd = 0
                         new_segm.append(sd)  # 7 : pixel deviation
-                        new_segm.append(k)  # 8 : line index
+                        new_segm.append(line_vertices[index, 2])  # 8 : line index
+                        new_segm.append(k)  # 9 : line index
                         candidate_link_list.append(new_segm)
 
+            '''
             if np.size(candidate_link_list) != 0:
                 candidate_link_list = np.asarray(
                     candidate_link_list).flatten().reshape((int(np.size(
@@ -371,210 +433,91 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                     row = np.where(candidate_link_list[:, 6] == np.amin(
                         candidate_link_list[:, 6]))[0][0]
 
-                print(candidate_link_list)
-                print(row)
+                # print(candidate_link_list)
+                # print(row)
+
+                # vertice_index.remove(candidate_vertice[row])
+
+                #if candidate_link_list[row][6] < 2:
+                #    print(candidate_link_list[row][6])
+                #    return False
 
                 return (candidate_link_list[row][0],
                         candidate_link_list[row][1],
                         candidate_link_list[row][2],
                         candidate_link_list[row][3],
-                        candidate_link_list[row][8])
+                        candidate_link_list[row][8],
+                        candidate_link_list[row][6])
+            '''
 
-            else:
+            if np.size(candidate_link_list) == 0:
                 return False
+            else:
+                return np.reshape(candidate_link_list,
+                                  (int(np.size(candidate_link_list)/10),
+                                   int(np.size(candidate_link_list) /
+                                       (np.size(candidate_link_list)/10))))
 
-    @jit(nopython=True)
-    def check_connection(connections, line1, line2):
-        '''
-        # Check if a connection between two lines already exists
 
-        Parameters
-        ----------
-        connections : Array of bool
-            Boolean matrix of connected lines.
-        line1 : int
-            Index of the first line.
-        line2 : int
-            Index of the second line.
-
-        Returns
-        -------
-        bool
-            Returns true if a connection exits and false otherwise.
-
-        '''
-        index = [line1, line2]
-        index.sort()
-        return connections[index[0]][index[1]]
-
-    @jit(nopython=True)
-    def add_connection(connections, line1, line2):
-        '''
-        # Mark two lines as connected
-
-        Parameters
-        ----------
-        connections : Array of bool
-            Boolean matrix of connected lines.
-        line1 : int
-            Index of the first line.
-        line2 : int
-            Index of the second line.
-
-        Returns
-        -------
-        connections: Array of bool
-            Boolean matrix of connected lines.
-
-        '''
-        index = [line1, line2]
-        index.sort()
-        connections[index[0]][index[1]] = True
-        return connections
-
-    def add_segments(index, line_vertices, new_lines):
-        '''
-        Create segments between two close segments
-
-        Parameters
-        ----------
-        index : int
-            Refer to wich line in the lines table is used as reference.
-        side : int
-            Define wich side of the segments are considered. Expects 0 or 1.
-        new_lines : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        new_lines : TYPE
-            DESCRIPTION.
-
-        '''
-
-        # vertice = list((line_vertices[index, 0], line_vertices[index, 1]))
-        segm = checkAround2(lines, line_vertices, index, window)
-        if type(segm) == tuple:
-            aux = list((segm[0], segm[1], segm[2], segm[3]))
-
-            add_connection(connections, int(line_vertices[index, 2]),
-                           int(segm[4]))
-
-            # count[index] += 1
-            new_lines = np.insert(new_lines, np.shape(new_lines)[0],
-                                  aux, axis=0)
-            return new_lines
-        else:
-            return new_lines
+    '''
+    index = 100
+    window = 50
+    alpha_limit = 120
+    beta_limit = 90
+    n = np.shape(line_vertices)[0]  # Number of vertices
+    connections = np.zeros((n, n), dtype=bool)
+    new_lines = []  # List of new segments to be added later
+   '''
 
     # Search for connections and save the new segments
     start = time.time()
-    for i in range(0, np.shape(line_vertices)[0]-1):
-        print("Entry: " + str(i))
-        new_lines = add_segments(i, line_vertices, new_lines)
-        # new_lines = add_segments(i, 1, new_lines)
+    for index in range(0, np.shape(line_vertices)[0]-1):
+        if np.size(new_lines) == 0:
+            aux = checkAround2(lines, line_vertices, index, window)
+            if type(aux) != bool:
+                new_lines = aux
+        else:
+            aux = checkAround2(lines, line_vertices, index, window)
+            if type(aux) != bool:
+                new_lines = np.insert(new_lines, np.shape(new_lines)[0], aux,
+                                      axis=0)
+                # new = np.uint(aux[:,0:4])
+                # new_angles = gm.get_line_angles(new)
+                # # new_angles[:,1] = 30
+                # test_connect = drawLines(new, new_angles,
+                #                           (np.shape(image)[0],
+                #                           np.shape(image)[1], 3),
+                #                           cv2.cvtColor(houghlines,
+                #                                       cv2.COLOR_RGB2GRAY))
+                # cv2.imwrite("test/"+str(index)+"vertice.png", test_connect)
+    new_lines = new_lines[np.argsort(new_lines[:, 6])]
     end = time.time()
     print('Time: ' + str((end - start)))
 
+    k = np.shape(lines)[0]  # Number of vertices
+    line_connections = np.zeros((k, k), dtype=bool)
+    line_count = np.zeros((k), dtype=np.uint)
+
+    new_lines2 = []
+    for i in range(0, np.shape(new_lines)[0]-1):
+        if line_count[int(new_lines[i, 8])] <= 2:
+            if line_count[int(new_lines[i, 9])] <= 2:
+                if (check_connection(line_connections, int(new_lines[i, 9]),
+                                     int(new_lines[i, 9])) is False):
+                    line_count[int(new_lines[i, 8])] += 1
+                    line_count[int(new_lines[i, 9])] += 1
+                    add_connection(line_connections, int(new_lines[i, 9]),
+                                   int(new_lines[i, 9]))
+                    new_lines2 = np.insert(new_lines2, np.shape(new_lines2)[0],
+                                           new_lines[i, 0:4], axis=0)
+
+    new_lines2 = np.reshape(new_lines2, (int(np.size(new_lines2)/4), 4))
+
     # Reshape array of new segments
-    new_lines = np.reshape(new_lines, (np.uint64(np.shape(new_lines)[0]/4), 4))
-    # lines_0 = lines
-    # Add the aditional segments to the list of segments
-    return np.insert(lines, np.shape(lines)[0], new_lines, axis=0)
+    new_lines2 = np.asarray(new_lines2, dtype=np.uint32)
+    print(np.shape(new_lines))
 
-
-def compute_distance(x0, y0, x1, y1):
-    '''
-    Compute the distance between two point.
-
-    Parameters
-    ----------
-    x0 : TYPE
-        DESCRIPTION.
-    y0 : TYPE
-        DESCRIPTION.
-    x1 : TYPE
-        DESCRIPTION.
-    y1 : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    dist : float
-        Distance in pixel size.
-
-    '''
-
-    dist = math.sqrt(math.pow((x1 - x0), 2) + math.pow((y1 - y0), 2))
-    return dist
-
-
-def compare_angles(base, line1, line2):
-    '''
-    Measure the angle between two lines or segments given a reference vertex.
-    Extends the closest point on line2 to the base point on line1 to measure
-    the angle.
-
-    Parameters
-    ----------
-    base : list
-        Vertex on line1 used as reference to obtain the angle.
-    line1 : list
-        First line or segment.
-    line2 : list
-        Second line or segment.
-
-    Returns
-    -------
-    angle : float
-        Angle in degrees.
-    distance : float
-        Distance to the closest point on line2 to the base point.
-    x : int
-        X position of the closest point on line2.
-    y : int
-        Y position of the closest point on line2.
-
-    '''
-    x0, y0 = base
-    if [line1[0], line1[1]] == [x0, y0]:
-        px, py = [line1[2], line1[3]]
-    else:
-        px, py = [line1[0], line1[1]]
-
-    dist0 = compute_distance(x0, y0, line2[0], line2[1])
-    dist1 = compute_distance(x0, y0, line2[2], line2[3])
-
-    if dist0 < dist1:
-        px = px - x0
-        py = py - y0
-        qx, qy = [float(line2[2]) - x0, float(line2[3]) - y0]
-        aux = ((px*qx) + (py*qy))/(math.sqrt(
-            math.pow(px, 2) + math.pow(py, 2))*math.sqrt(math.pow(qx, 2) +
-                                                         math.pow(qy, 2)))
-        try:
-            angle = math.acos(aux)*180/math.pi
-        except Exception:
-            if (aux) > 0:
-                angle = 0
-            if (aux) < 0:
-                angle = 180
-        return (angle, dist0, line2[0], line2[1])
-    else:
-        px = px - x0
-        py = py - y0
-        qx, qy = [line2[0] - x0, line2[1] - y0]
-        aux = ((px*qx) + (py*qy))/(math.sqrt(
-            math.pow(px, 2) + math.pow(py, 2))*math.sqrt(math.pow(qx, 2) +
-                                                         math.pow(qy, 2)))
-        try:
-            angle = math.acos(aux)*180/math.pi
-        except Exception:
-            if (aux) > 0:
-                angle = 0
-            if (aux) < 0:
-                angle = 180
-        return (angle, dist1, line2[2], line2[3])
+    return np.insert(lines, np.shape(lines)[0], new_lines2, axis=0)
 
 
 def findIntersection(line1, line2):
@@ -702,32 +645,7 @@ def generateSegmGroups(lines):
     return segm_groups
 
 
-def getLineAngles(lines):
-    # Get distance and angle of all lines regarding north
-    n = np.shape(lines)[0]
-    angles = np.zeros((n, 2), np.float64)
-    for i in range(0, n):
-        length = np.sqrt(np.power((lines[i][2] - lines[i][0]), 2) +
-                         np.power((lines[i][3] - lines[i][1]), 2))
-        '''if (lines[i][1]-lines[i][3]) == 0:
-            angle = 90
-        elif (lines[i][0]-lines[i][2]) == 0:
-            angle = 0
-        else:
-            '''
-        angle = (math.atan((lines[i][2]-lines[i][0])/(lines[i][1]-lines[i][3]))
-                 / (theta))
 
-        if (angle < 0):
-            angle = angle + 360
-        if (angle > 180):
-            angle = angle - 180
-        if math.isnan(angle):
-            angle = 0
-
-        angles[i, 0] = np.uint8(angle)
-        angles[i, 1] = length
-    return angles
 
 
 def regressionGroupSegments(segm_groups, lines, mode='canvas',
@@ -927,7 +845,7 @@ def ComputeFractureStatistics(lines, threshold, offset):
 
             length = 0
             for row in box:
-                length_line = compute_distance(row[0], row[1], row[2], row[3])
+                length_line = gm.compute_distance(row[0], row[1], row[2], row[3])
                 if length_line > 1:
                     length += length_line
 

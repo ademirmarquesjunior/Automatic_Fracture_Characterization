@@ -7,7 +7,10 @@ Created on Wed Sep 18 11:50:19 2019
 import cv2
 import numpy as np
 import PySimpleGUI as sg
+
+
 import fracture_detection_hough as frac
+import geometry as gm
 import layout as view
 
 # import matplotlib.pyplot as plt
@@ -204,8 +207,8 @@ while True:
                                 minLineLength=int(values["_Sl_min_"]),
                                 maxLineGap=int(values["_Sl_max_"]))
         lines = np.reshape(lines, (np.shape(lines)[0], 4))
-        lines = np.uint(lines)
-        angles = frac.getLineAngles(lines)
+        lines = np.int64(lines)
+        angles = gm.get_line_angles(lines)
         houghlines = frac.drawLines(lines, angles, (np.shape(image)[0],
                                                     np.shape(image)[1], 3),
                                     smooth)
@@ -227,7 +230,7 @@ while True:
         #   smooth, lines, angles, 50, 135, 135, 'distance')
         # end = timeit.timeit()
         # print((end - start)*100)
-        angles2 = frac.getLineAngles(connected_lines)
+        angles2 = gm.get_line_angles(connected_lines)
         connectionlines = frac.drawLines(np.uint64(connected_lines), angles2,
                                          (np.shape(image)[0], np.shape(
                                              image)[1], 3), image=smooth)
@@ -258,7 +261,7 @@ while True:
                                                         connected_lines,
                                                         values['_Cb_method_'],
                                                         values['_Cb_regression_'])
-        segm_group_angles = frac.getLineAngles(regression_lines)
+        segm_group_angles = gm.get_line_angles(regression_lines)
         end = timeit.timeit()
         print(end - start)
 
@@ -319,7 +322,7 @@ while True:
             print(frac.compute_distance(inicio[0], inicio[1] , fim[0], fim[1]))
             '''
 
-            boxsize = int(frac.compute_distance(0, 0, row, col))
+            boxsize = int(gm.compute_distance(0, 0, row, col))
 
         # boxsize = 60
         data = frac.ComputeFractureStatistics(connected_lines, threshold,
@@ -465,7 +468,7 @@ for i in range(0,np.shape(lines)[0]):
 
 lsd = cv2.createLineSegmentDetector(0)
 lines1 = lsd.detect(np.uint8(smooth))[0]
-angles0 = frac.getLineAngles(np.reshape(lines1, (np.shape(lines1)[0],4)))
+angles0 = gm.get_line_angles(np.reshape(lines1, (np.shape(lines1)[0],4)))
 image0 = frac.drawLines(np.reshape(lines1, (np.shape(lines1)[0],4)), angles,
                         np.shape(image))
 frac.show_image(image0)
