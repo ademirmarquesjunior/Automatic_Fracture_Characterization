@@ -53,10 +53,7 @@ horizontal_slider = sg.Slider(
                         default_value=0, key="_Sl_horizontal_")
 
 
-layout = [[sg.Menu(menu_def, tearoff=True)],
-          [main_canvas, vertical_slider,
-           sg.Frame("", [
-                [sg.Frame("Image processing", [
+image_processing = sg.Frame("Image processing", [
                     [sg.Text('Filter size'),
                      sg.Radio('3', "RADIO1"),
                      sg.Radio('5', "RADIO1"),
@@ -78,11 +75,16 @@ layout = [[sg.Menu(menu_def, tearoff=True)],
                     [sg.Text('Skeletonization'),
                      sg.Radio('Lee', "RADIO4", default=True),
                      sg.Radio('Zhang', "RADIO4", disabled=True),
-                     sg.Radio
                      ],
                     [sg.Button('Image processing', key='_Bt_processing_',
                                disabled=True,
-                               size=(50, 1)), ]])],
+                               size=(50, 1)), ]]
+                    )
+
+layout = [[sg.Menu(menu_def, tearoff=True)],
+          [main_canvas, vertical_slider,
+           sg.Frame("", [
+                [image_processing, ],
 
                 # [
                 #     sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
