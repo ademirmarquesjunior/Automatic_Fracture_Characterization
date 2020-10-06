@@ -59,8 +59,12 @@ def get_line_angles(lines):
     for i in range(0, n):
         length = compute_distance(lines[i][0], lines[i][1], lines[i][2],
                                   lines[i][3])
-        angle = (math.atan((lines[i][2]-lines[i][0])/(lines[i][1]-lines[i][3]))
-                 / (THETA))
+
+        if lines[i][1] == lines[i][3]:
+            angle = 90
+        else:
+            angle = (math.atan((lines[i][2]-lines[i][0])
+                               / (lines[i][1]-lines[i][3])) / (THETA))
 
         if (angle < 0):
             angle = angle + 360

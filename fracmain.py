@@ -12,6 +12,7 @@ import PySimpleGUI as sg
 import fracture_detection_hough as frac
 import geometry as gm
 import layout as view
+import plots
 
 # import matplotlib.pyplot as plt
 import math
@@ -19,7 +20,7 @@ import math
 
 import base64
 from io import BytesIO
-import timeit
+# import timeit
 
 import rasterio
 import utm
@@ -144,7 +145,7 @@ while True:
             window.Element("_Tx_position_").Update(value=str((position[0],
                                                               position[1])))
 
-    elif event == '_Bt_processing_':
+    elif event == '_Bt_processing_':  # ---------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         sigma = 0
@@ -187,9 +188,9 @@ while True:
 
         temp = updateCanvas(cv2.bitwise_not(onepixel), hor, ver)
 
-        cv2.imwrite("temp/smooth.png", smooth)
-        cv2.imwrite("temp/threshold.png", threshold)
-        cv2.imwrite("temp/skeleton.png", 255-onepixel)
+        cv2.imwrite("temp/0-smooth.png", smooth)
+        cv2.imwrite("temp/1-threshold.png", threshold)
+        cv2.imwrite("temp/2-skeleton.png", 255-onepixel)
 
         window.Element("_Bt_smoothed_").Update(disabled=False)
         window.Element("_Bt_thresholded_").Update(disabled=False)
@@ -197,7 +198,7 @@ while True:
         window.Element("_Bt_thinned_").Update(disabled=False)
         sg.Popup('Image processing finished')
 
-    elif event == '_Bt_hough_':
+    elif event == '_Bt_hough_':  # -------------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         theta = math.pi/180
@@ -211,38 +212,30 @@ while True:
         angles = gm.get_line_angles(lines)
         houghlines = frac.drawLines(lines, angles, (np.shape(image)[0],
                                                     np.shape(image)[1], 3),
-                                    smooth)
+                                    threshold)
         # temp = houghlines
         temp = updateCanvas(houghlines, hor, ver)
-        cv2.imwrite("temp/hough.png", houghlines)
+        cv2.imwrite("temp/3-hough.png", houghlines)
         window.Element("_Bt_lined_").Update(disabled=False)
         window.Element("_Bt_connect_").Update(disabled=False)
 
-    elif event == '_Bt_connect_':
+    elif event == '_Bt_connect_':  # ------------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         # start = timeit.timeit()
-        connected_lines = frac.connectLines(smooth, lines, angles, int(
-            values['_Sl_radius_']), float(values['_Sl_alpha_']), float(
-                values['_Sl_beta_']), values['_Cb_mode_'])
-        # import fracture_detection_hough as frac
-        # connected_lines = frac.connectLines(
-        #   smooth, lines, angles, 50, 135, 135, 'distance')
-        # end = timeit.timeit()
-        # print((end - start)*100)
+        connected_lines = frac.connectLines(threshold, lines, angles,
+                                            int(values['_Sl_radius_']),
+                                            float(values['_Sl_alpha_']),
+                                            float(values['_Sl_beta_']),
+                                            float(values['_In_a_']),
+                                            float(values['_In_b_']),
+                                            float(values['_In_threshold_']))
         angles2 = gm.get_line_angles(connected_lines)
         connectionlines = frac.drawLines(np.uint64(connected_lines), angles2,
                                          (np.shape(image)[0], np.shape(
-                                             image)[1], 3), image=smooth)
+                                             image)[1], 3), threshold)
 
-        # frac.show_image(connectionlines)
-        # frac.show_image(houghlines)
-        # frac.show_image(cv2.addWeighted(connectionlines, 0.4, cv2.cvtColor(
-        #   smooth, cv2.COLOR_GRAY2BGR), 0.5, 0.0))
-
-        cv2.imwrite("temp/connected3.png", connectionlines)
-        # connectionlines = cv2.addWeighted(connectionlines, 0.4,
-        #                   cv2.cvtColor(smooth, cv2.COLOR_GRAY2BGR), 0.5, 0.0)
+        cv2.imwrite("temp/4-connected.png", connectionlines)
 
         temp = updateCanvas(connectionlines, hor, ver)
         # cv2.imwrite("temp/connected.png", connectionlines)
@@ -251,26 +244,23 @@ while True:
         window.Element("_Bt_rosechart_").Update(disabled=False)
         window.Element("_Bt_fracture_statistics_").Update(disabled=False)
 
-    elif event == '_Bt_rosechart_':
+    elif event == '_Bt_rosechart_':  # ----------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
 
-        start = timeit.timeit()
+        # start = timeit.timeit()
         segm_groups = frac.generateSegmGroups(connected_lines)
         regression_lines = frac.regressionGroupSegments(segm_groups,
                                                         connected_lines,
                                                         values['_Cb_method_'],
                                                         values['_Cb_regression_'])
         segm_group_angles = gm.get_line_angles(regression_lines)
-        end = timeit.timeit()
-        print(end - start)
+        # end = timeit.timeit()
+        # print(end - start)
 
         pca_lines = frac.drawLines(regression_lines, segm_group_angles, (
-            np.shape(image)[0], np.shape(image)[1], 3), image)
-        cv2.imwrite('temp/pca_lines.png', pca_lines)
-
-        # frac.show_image()
-        # plt.hist(segm_group_angles[:,1])
+            np.shape(image)[0], np.shape(image)[1], 3), smooth)
+        cv2.imwrite('temp/5-pca_lines.png', pca_lines)
 
         segmgroups = frac.drawLineGroups(segm_groups, segm_group_angles,
                                          connected_lines, (np.shape(image)[0],
@@ -278,20 +268,20 @@ while True:
                                                                image)[1], 3),
                                          smooth)
 
-        cv2.imwrite('temp/groups.png', segmgroups)
+        cv2.imwrite('temp/6-groups.png', segmgroups)
 
         # frac.show_image(segmgroups)
 
         window.Element("_Sl_horizontal_").Update(value=0)
         window.Element("_Sl_vertical_").Update(value=0)
-        plot = frac.rosechartPlot(segm_group_angles[:, 0], 'Rosechart')
+        plot = plots.rosechart(segm_group_angles[:, 0])
         cv2.imwrite('temp/plot.png', plot)
         plot = cv2.resize(plot, (500, 500))
         temp = updateCanvas(plot, 0, 0)
         window.Element("_Bt_groups_").Update(disabled=False)
         window.Element("_Bt_rosechart_plot_").Update(disabled=False)
 
-    elif event == '_Bt_fracture_statistics_':
+    elif event == '_Bt_fracture_statistics_':  # ------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
 

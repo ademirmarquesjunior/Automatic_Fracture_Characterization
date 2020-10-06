@@ -15,6 +15,7 @@ import geometry as gm
 from sklearn.decomposition import PCA
 from PIL import Image
 from skimage.morphology import skeletonize
+from skimage.draw import line
 # from skimage.filters import (threshold_otsu, threshold_niblack,
 #                              threshold_sauvola)
 
@@ -171,8 +172,7 @@ def skeletonize_image(image, invert, mode):
     return new_image
 
 
-@jit(nopython=True)
-def bresenham_march(image, p1, p2):
+def bresenham_march(image, x1, y1, x2, y2):
     '''
     Line iterator substituting opencv removed implementation
     https://stackoverflow.com/questions/32328179/opencv-3-0-python-lineiterator
@@ -192,59 +192,10 @@ def bresenham_march(image, p1, p2):
         List of pixel intensities for the given segment.
 
     '''
-    x1 = p1[0]
-    y1 = p1[1]
-    x2 = p2[0]
-    y2 = p2[1]
-    # tests if any coordinate is outside the image
-    if (
-        x1 >= image.shape[0]
-        or x2 >= image.shape[0]
-        or y1 >= image.shape[1]
-        or y2 >= image.shape[1]
-    ):  # tests if line is in image, necessary because some part of the line
-        # must be inside, it respects the case that the two points are outside
-        # aux = cv2.clipLine((0, 0, image.shape[0], image.shape[1]), p1, p2)[0]
-        aux = True
-        if aux is False:
-            print("not in region")
-            return
 
-    steep = math.fabs(y2 - y1) > math.fabs(x2 - x1)
-    if steep:
-        x1, y1 = y1, x1
-        x2, y2 = y2, x2
+    discrete_line = line(x1, y1, x2, y2)
 
-    # takes left to right
-    also_steep = x1 > x2
-    if also_steep:
-        x1, x2 = x2, x1
-        y1, y2 = y2, y1
-
-    dx = x2 - x1
-    dy = math.fabs(y2 - y1)
-    error = 0.0
-    delta_error = 0.0
-    # Default if dx is zero
-    if dx != 0:
-        delta_error = math.fabs(dy / dx)
-
-    y_step = 1 if y1 < y2 else -1
-
-    y = y1
-    ret = []
-    for x in range(x1, x2):
-        p = (y, x) if steep else (x, y)
-        if p[0] < image.shape[0] and p[1] < image.shape[1]:
-            # ret.append((p, image[p]))
-            ret.append(image[p])
-        error += delta_error
-        if error >= 0.5:
-            y += y_step
-            error -= 1
-    if also_steep:  # because we took the left to right instead
-        ret.reverse()
-    return ret
+    return image[discrete_line[1], discrete_line[0]]
 
 
 @jit(nopython=True)
@@ -298,7 +249,7 @@ def add_connection(connections, obj1, obj2):
     return connections
 
 
-def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
+def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b, t):
 
     # Change list of lines to list of vertices
     line_vertices = np.reshape(lines, (int(np.size(lines)/2), 2))
@@ -324,7 +275,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     # mode = 'distance'
     vertice_index = list(range(n))
 
-    def checkAround2(lines, line_vertices, index, radius):
+    def checkAround2(lines, line_vertices, index, window):
         '''
         # Given a reference point(vertice), finds anther close segments
         # O calculo do ângulo entre duas retas precisa ser atualizado
@@ -359,15 +310,15 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
 
         for j in vertice_index:
             if line_vertices[index, 2] != line_vertices[j, 2]:
-                # if check_connection(connections, int(index), int(j)) is False:
-                if True:
+                if check_connection(connections, int(index), int(j)) is False:
+                # if True:
                     dist = gm.compute_distance(vertice[0], vertice[1],
-                                            line_vertices[j, 0],
-                                            line_vertices[j, 1])
+                                               line_vertices[j, 0],
+                                               line_vertices[j, 1])
 
                     # If one of the vertexes of a segment are within offset
                     # distance add its index to candidate list
-                    if dist <= radius:
+                    if dist <= window:
                         # vertice_index.remove(j)
                         add_connection(connections, int(index), int(j))
                         candidate_segm_list.append(line_vertices[j, 2])
@@ -390,78 +341,58 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
                     beta = gm.compare_angles(vertice, lines[line_vertices[
                         index, 2]], new_segm)
                     if beta[0] >= beta_limit:
-                        # length = sd = 0
                         new_segm.append(alpha[0])  # 4 : alpha angle
                         new_segm.append(beta[0])  # 5 : beta angle
-                        new_segm.append(alpha[1])  # 6 : point distance
-                        # if mode == 'deviation':
-                        pixels = 0
-                        #pixels = bresenham_march(image, (new_segm[0],
-                        #                                 new_segm[1]),
-                        #                         (new_segm[2], new_segm[3]))
-                        # print(pixels)
-                        if False:  # np.size(pixels) > 10:
-                            plt.title(str(np.mean(pixels))+" "+str(
-                                np.std(pixels)))
-                            plt.plot(pixels)
-                            plt.show()
-                            print(np.mean(pixels), (pixels[0]+pixels[-1])/2,
-                                  np.var(pixels))
+                        new_segm.append(alpha[1])  # 6 : new line lenght
 
-                        # sd = np.median(pixels) + np.std(pixels)
-                        sd = 0
-                        new_segm.append(sd)  # 7 : pixel deviation
-                        new_segm.append(line_vertices[index, 2])  # 8 : line index
+                        x1, y1, x2, y2 = np.int64(new_segm[0:4])
+                        pixels = bresenham_march(threshold, x1, y1, x2, y2)
+                        if np.size(pixels) < 1:
+                            mean_pixels = 0
+                        else:
+                            mean_pixels = np.mean(pixels)
+                            # plt.plot(pixels)
+                            # print(pixels)
+                            # print(mean_pixels)
+                        new_segm.append(mean_pixels)  # 7 : pixel deviation
+                        new_segm.append(line_vertices[index, 2])  # 8 : ref
                         new_segm.append(k)  # 9 : line index
                         candidate_link_list.append(new_segm)
-
-            '''
-            if np.size(candidate_link_list) != 0:
-                candidate_link_list = np.asarray(
-                    candidate_link_list).flatten().reshape((int(np.size(
-                        candidate_link_list)/9), 9))
-                if mode == 'alpha':  # greater alpha
-                    row = np.where(candidate_link_list[:, 4] == np.amax(
-                        candidate_link_list[:, 4]))[0][0]
-                if mode == 'beta':  # greater beta
-                    row = np.where(candidate_link_list[:, 5] == np.amax(
-                        candidate_link_list[:, 5]))[0][0]
-                if mode == 'distance':  # minor distance
-                    row = np.where(candidate_link_list[:, 6] == np.amin(
-                        candidate_link_list[:, 6]))[0][0]
-                if mode == 'deviation':  # minor deviation
-                    row = np.where(candidate_link_list[:, 6] == np.amin(
-                        candidate_link_list[:, 6]))[0][0]
-
-                # print(candidate_link_list)
-                # print(row)
-
-                # vertice_index.remove(candidate_vertice[row])
-
-                #if candidate_link_list[row][6] < 2:
-                #    print(candidate_link_list[row][6])
-                #    return False
-
-                return (candidate_link_list[row][0],
-                        candidate_link_list[row][1],
-                        candidate_link_list[row][2],
-                        candidate_link_list[row][3],
-                        candidate_link_list[row][8],
-                        candidate_link_list[row][6])
-            '''
 
             if np.size(candidate_link_list) == 0:
                 return False
             else:
-                return np.reshape(candidate_link_list,
-                                  (int(np.size(candidate_link_list)/10),
-                                   int(np.size(candidate_link_list) /
-                                       (np.size(candidate_link_list)/10))))
+                candidate = np.reshape(candidate_link_list,
+                                       (int(np.size(candidate_link_list)/10),
+                                        int(np.size(candidate_link_list) /
+                                            (np.size(candidate_link_list)/10)))
+                                       )
 
+                # a = 0.0099667  # 0.011
+                # b = -0.0848937  # -0.0204
+                # c = -0.0133513
+                # t = 1
+                # aux = ((candidate[:, 4]*a) + (candidate[:, 5]*b) +
+                #        (candidate[:, 6]*c))
+
+                # aux = ((candidate[:, 4]*0) + (candidate[:, 5]*0) +
+                #        (window-candidate[:, 6]*1))
+
+                # row = np.where(aux == np.amax(aux))
+                row = np.lexsort((candidate[:, 6], candidate[:, 7]))[0]
+
+                # print("***" + str(candidate[row[0][0]][7]))
+                if candidate[row][7] > 0:
+                    return False
+                # if aux[row][0] < t:
+                #     print("fora")
+                #     return False
+                # else:
+                return np.reshape(candidate[row], (1, 10))
 
     '''
-    index = 100
-    window = 50
+    index = 1
+    window = radius = 50
     alpha_limit = 120
     beta_limit = 90
     n = np.shape(line_vertices)[0]  # Number of vertices
@@ -472,25 +403,36 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     # Search for connections and save the new segments
     start = time.time()
     for index in range(0, np.shape(line_vertices)[0]-1):
-        if np.size(new_lines) == 0:
-            aux = checkAround2(lines, line_vertices, index, window)
-            if type(aux) != bool:
+        aux = checkAround2(lines, line_vertices, index, window)
+        if type(aux) != bool:
+            if np.size(new_lines) == 0:
                 new_lines = aux
-        else:
-            aux = checkAround2(lines, line_vertices, index, window)
-            if type(aux) != bool:
+            else:
                 new_lines = np.insert(new_lines, np.shape(new_lines)[0], aux,
                                       axis=0)
-                # new = np.uint(aux[:,0:4])
-                # new_angles = gm.get_line_angles(new)
-                # # new_angles[:,1] = 30
-                # test_connect = drawLines(new, new_angles,
-                #                           (np.shape(image)[0],
-                #                           np.shape(image)[1], 3),
-                #                           cv2.cvtColor(houghlines,
-                #                                       cv2.COLOR_RGB2GRAY))
-                # cv2.imwrite("test/"+str(index)+"vertice.png", test_connect)
-    new_lines = new_lines[np.argsort(new_lines[:, 6])]
+            # new = np.uint(aux[:,0:4])
+            # new_angles = gm.get_line_angles(new)
+            # new_angles[:,1] = 30
+            # test_connect = drawLines(new, new_angles,
+            #                           (np.shape(image)[0],
+            #                           np.shape(image)[1], 3),
+            #                           cv2.cvtColor(houghlines,
+            #                                       cv2.COLOR_RGB2GRAY))
+            # cv2.imwrite("test/"+str(index)+"vertice.png", test_connect)
+
+            # for j in range(0, np.shape(aux)[0]-1):
+            #     test_connect = np.copy(houghlines)
+            #     test_connect = cv2.line(test_connect, (int(aux[j, 0]),
+            #                                            int(aux[j, 1])),
+            #                             (int(aux[j, 2]), int(aux[j, 3])),
+            #                             (255, 255, 255), 1)
+            #     cv2.imwrite("test/entry_"+str(int(aux[j, 8]))+"_"+str(int(
+            #         aux[j, 9]))+".jpg", test_connect)
+    if np.size(new_lines) == 0:
+        # np.savetxt("new_lines.csv", np.asarray(new_lines), delimiter=",")
+        return lines
+
+    # new_lines = new_lines[np.argsort(new_lines[:, 6])]
     end = time.time()
     print('Time: ' + str((end - start)))
 
@@ -501,6 +443,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     new_lines2 = []
     for i in range(0, np.shape(new_lines)[0]-1):
         if line_count[int(new_lines[i, 8])] <= 2:
+            if int(new_lines[i, 9]) == 0: print("hit")
             if line_count[int(new_lines[i, 9])] <= 2:
                 if (check_connection(line_connections, int(new_lines[i, 9]),
                                      int(new_lines[i, 9])) is False):
@@ -517,7 +460,7 @@ def connectLines(image, lines, angles, window, alpha_limit, beta_limit, mode):
     new_lines2 = np.asarray(new_lines2, dtype=np.uint32)
     print(np.shape(new_lines))
 
-    return np.insert(lines, np.shape(lines)[0], new_lines2, axis=0)
+    return np.insert(lines, np.shape(lines)[0], np.int64(new_lines2), axis=0)
 
 
 def findIntersection(line1, line2):
@@ -753,7 +696,7 @@ def drawLines(lines, angles, shape, image=None, mode='color'):
             color = (color[0]*255, color[1]*255, color[2]*255)
         canvas = cv2.line(canvas, (lines[i][0], lines[i][1]),
                           (lines[i][2], lines[i][3]),
-                          (int(color[0]), int(color[1]), int(color[2])), 2)
+                          (int(color[0]), int(color[1]), int(color[2])), 1)
 
     return canvas
 
@@ -774,7 +717,7 @@ def drawLineGroups(segm_groups, segm_group_angles, lines, shape, image=None):
         color = (color[0]*255, color[1]*255, color[2]*255)
         for j in segm_groups[i]:
             canvas = cv2.line(canvas, (lines[j][0], lines[j][1]),
-                              (lines[j][2], lines[j][3]), color, 2)
+                              (lines[j][2], lines[j][3]), color, 1)
 
     return canvas
 
@@ -958,39 +901,6 @@ def barColor(max_value, x, y, dwg, text):
                      fill=svgwrite.rgb(15, 15, 15, '%'), font_size='12px',
                      font_weight="bold"))
     return
-
-
-def rosechartPlot(angles, title):
-
-    bin_edges = np.arange(-5, 366, 10)
-    number_of_strikes, bin_edges = np.histogram(angles, bin_edges)
-
-    number_of_strikes[0] += number_of_strikes[-1]
-
-    half = np.sum(np.split(number_of_strikes[:-1], 2), 0)
-    two_halves = np.concatenate([half, half])
-
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.add_subplot(111, projection='polar')
-
-    ax.bar(np.deg2rad(np.arange(0, 360, 10)), two_halves,
-           width=np.deg2rad(10), bottom=0.0, color='.8', edgecolor='k')
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    ax.set_thetagrids(np.arange(0, 360, 10), labels=np.arange(0, 360, 10))
-    # ax.set_rgrids(np.arange(1, two_halves.max()+1, 2),angle=0,weight='black')
-    ax.set_title(title, y=1.10, fontsize=15)
-    # plt.show()
-    fig.tight_layout()
-    fig.canvas.draw()
-
-    # Now we can save it to a numpy array.
-    plot = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    plot = plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-
-    plt.show()
-
-    return plot
 
 
 def loadEdgeData():
