@@ -12,6 +12,7 @@ import PySimpleGUI as sg
 import fracture_detection_hough as frac
 import geometry as gm
 import layout as view
+import file_handling as fh
 import plots
 
 # import matplotlib.pyplot as plt
@@ -22,7 +23,7 @@ import base64
 from io import BytesIO
 # import timeit
 
-import rasterio
+import rasterio as rt
 import utm
 
 # from pathlib import Path, PureWindowsPath
@@ -96,35 +97,32 @@ while True:
     event, values = window.Read()
     if event is None or event == 'Exit':
         break
-    elif event == 'Open':
+    elif event == 'Open':  # -------------------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
 
         address = sg.PopupGetFile('Document to open')
+        scale = int(values["_Sl_scale_"])/100
+
         try:
-            file = open(address, 'rb').read()
-            dataset = rasterio.open(address)
-            # sg.Popup(str(dataset.crs + dataset.bounds))
-            try:
-                image = cv2.imdecode(np.frombuffer(file, np.uint8), 0)
-                # temp = image
-                temp = updateCanvas(image, hor, ver)
-                window.Element("_Bt_processing_").Update(disabled=False)
-                window.Element("_Bt_original_").Update(disabled=False)
-                window.Element("_Tx_position_").Update(value=str(
-                    dataset.crs)+" "+str(dataset.bounds.left,
-                                         dataset.bounds.top))
-                (dataset.bounds.left, dataset.bounds.top)
-                # window.Element("_Bt_scanline_").Update(disabled=False)
-            except ValueError:
-                sg.Popup(ValueError)
+            image, dataset = fh.load_image(address, scale)
+            grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            temp = updateCanvas(image, hor, ver)
+            window.Element("_Bt_processing_").Update(disabled=False)
+            window.Element("_Bt_original_").Update(disabled=False)
+            window.Element("_Tx_position_").Update(value=str(
+                dataset.crs)+" "+str(dataset.bounds.left,
+                                     dataset.bounds.top))
+            # window.Element("_Bt_scanline_").Update(disabled=False)
         except Exception as e:
-            sg.Popup('Invalid file address. ' + str(e))
-    elif event == '_Sl_horizontal_' or event == '_Sl_vertical_':
+            sg.Popup(str(e))
+
+    elif event == '_Sl_horizontal_' or event == '_Sl_vertical_':  # -----------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         temp = updateCanvas(temp, hor, ver)
-    elif event == '_Canvas1_':
+
+    elif event == '_Canvas1_':  # ---------------------------------------------
         position = values['_Canvas1_']
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
@@ -138,8 +136,8 @@ while True:
                 positionY = np.shape(image)[0]-size[0]-1
             x = positionX+position[0]
             y = positionY+abs(position[1]-size[1])
-            window.Element("_Tx_position_").Update(value=str(dataset.crs)
-                                                   + str(dataset.xy(x, y)))
+            window.Element("_Tx_position_").Update(
+                value=str(dataset.crs) + str(dataset.xy(x, y)))
         except Exception as e:
             print(e)
             window.Element("_Tx_position_").Update(value=str((position[0],
@@ -166,20 +164,22 @@ while True:
             kernel = 13
 
         if values[7] is True:
-            smooth = cv2.blur(image, (kernel, kernel))
+            smooth = cv2.blur(grayscale, (kernel, kernel))
         if values[8] is True:
-            smooth = cv2.medianBlur(image, kernel)
+            smooth = cv2.medianBlur(grayscale, kernel)
         if values[9] is True:
-            smooth = cv2.GaussianBlur(image, (kernel, kernel), sigma)
+            smooth = cv2.GaussianBlur(grayscale, (kernel, kernel), sigma)
         if values[10] is True:
-            smooth = cv2.bilateralFilter(image, kernel, 75, 75)
+            smooth = cv2.bilateralFilter(grayscale, kernel, 75, 75)
 
         if values[11] is True:
             threshold = frac.adaptative_thresholding(smooth, 31, 'sauvola')
         if values[12] is True:
             threshold = frac.adaptative_thresholding(smooth, 31, 'niblack')
         if values[13] is True:
-            threshold = frac.adaptative_thresholding(smooth, 31, 'phansalkar')
+            threshold = frac.adaptative_thresholding(smooth, 31, 'otsu')
+
+        threshold = np.uint8((1-threshold)*255)
 
         if values[14] is True:
             onepixel = frac.skeletonize_image(threshold, True, 'lee')
@@ -188,9 +188,15 @@ while True:
 
         temp = updateCanvas(cv2.bitwise_not(onepixel), hor, ver)
 
-        cv2.imwrite("temp/0-smooth.png", smooth)
-        cv2.imwrite("temp/1-threshold.png", threshold)
-        cv2.imwrite("temp/2-skeleton.png", 255-onepixel)
+        fh.save_image(smooth, "temp/0-smooth.tif",
+                      dataset.profile['crs'],
+                      dataset.profile['transform'])
+        fh.save_image(threshold, "temp/1-threshold.tif",
+                      dataset.profile['crs'],
+                      dataset.profile['transform'])
+        fh.save_image(np.uint8(255-onepixel), "temp/2-skeleton.tif",
+                      dataset.profile['crs'],
+                      dataset.profile['transform'])
 
         window.Element("_Bt_smoothed_").Update(disabled=False)
         window.Element("_Bt_thresholded_").Update(disabled=False)
@@ -210,12 +216,16 @@ while True:
         lines = np.reshape(lines, (np.shape(lines)[0], 4))
         lines = np.int64(lines)
         angles = gm.get_line_angles(lines)
+        whiteboard = np.full(np.shape(smooth), 255, dtype=np.uint8)
         houghlines = frac.drawLines(lines, angles, (np.shape(image)[0],
                                                     np.shape(image)[1], 3),
-                                    threshold)
-        # temp = houghlines
+                                    whiteboard, mode='black')
+
+        fh.save_image(houghlines, "temp/3-hough.tif",
+                      dataset.profile['crs'],
+                      dataset.profile['transform'])
+
         temp = updateCanvas(houghlines, hor, ver)
-        cv2.imwrite("temp/3-hough.png", houghlines)
         window.Element("_Bt_lined_").Update(disabled=False)
         window.Element("_Bt_connect_").Update(disabled=False)
 
@@ -226,14 +236,14 @@ while True:
         connected_lines = frac.connectLines(threshold, lines, angles,
                                             int(values['_Sl_radius_']),
                                             float(values['_Sl_alpha_']),
-                                            float(values['_Sl_beta_']),
-                                            float(values['_In_a_']),
-                                            float(values['_In_b_']),
-                                            float(values['_In_threshold_']))
+                                            float(values['_Sl_beta_']))
         angles2 = gm.get_line_angles(connected_lines)
-        connectionlines = frac.drawLines(np.uint64(connected_lines), angles2,
+        whiteboard = np.full(np.shape(smooth), 255, dtype=np.uint8)
+        connectionlines = frac.drawLines(np.uint64(connected_lines),
+                                         angles2,
                                          (np.shape(image)[0], np.shape(
-                                             image)[1], 3), threshold)
+                                             image)[1], 3),
+                                         whiteboard, 'black')
 
         cv2.imwrite("temp/4-connected.png", connectionlines)
 
@@ -252,12 +262,12 @@ while True:
         segm_groups = frac.generateSegmGroups(connected_lines)
         regression_lines = frac.regressionGroupSegments(segm_groups,
                                                         connected_lines,
-                                                        values['_Cb_method_'],
-                                                        values['_Cb_regression_'])
+                                                        'points')
         segm_group_angles = gm.get_line_angles(regression_lines)
         # end = timeit.timeit()
         # print(end - start)
 
+        regression_lines = np.int64(regression_lines)
         pca_lines = frac.drawLines(regression_lines, segm_group_angles, (
             np.shape(image)[0], np.shape(image)[1], 3), smooth)
         cv2.imwrite('temp/5-pca_lines.png', pca_lines)
@@ -278,6 +288,8 @@ while True:
         cv2.imwrite('temp/plot.png', plot)
         plot = cv2.resize(plot, (500, 500))
         temp = updateCanvas(plot, 0, 0)
+
+        plot2 = plots.histogram(segm_group_angles[:,1])
         window.Element("_Bt_groups_").Update(disabled=False)
         window.Element("_Bt_rosechart_plot_").Update(disabled=False)
 
@@ -292,7 +304,7 @@ while True:
             sg.Popup('Insert a valid number!')
             break
 
-        dataset = rasterio.open(address)
+        # dataset = rt.open(address)
         print(dataset.crs)
 
         if str(dataset.crs) != 'None':
@@ -304,7 +316,7 @@ while True:
             row, col = dataset.index(position[0], position[1])
 
             '''
-            dataset = rasterio.open('lajedo4.tif')
+            dataset = rt.open('lajedo4.tif')
 
             inicio = utm.from_latlon(dataset.xy(0,0)[0], dataset.xy(0,0)[1])
             fim = utm.from_latlon(dataset.xy(0,60)[0], dataset.xy(0,60)[1])
@@ -343,36 +355,26 @@ while True:
                                               'raster', 'intensity')
             intensity = frac.drawLines(connected_lines, angles2, image,
                                        image=intensity, mode='black')
-            cv2.imwrite('temp/intensity.png', intensity)
             intensity = cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB)
-            # frac.show_image(cv2.cvtColor(intensity, cv2.COLOR_BGR2RGB))
+            fh.save_image(intensity, "temp/intensity.tif",
+                          dataset.profile['crs'],
+                          dataset.profile['transform'])
 
             spacing = frac.fractureAreaPlot(data, boxsize, image, 'raster',
                                             'spacing')
             spacing = frac.drawLines(connected_lines, angles2, image,
                                      image=spacing, mode='black')
-
-            cv2.imwrite('temp/spacing.png', spacing)
             spacing = cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB)
-            # frac.show_image(cv2.cvtColor(spacing, cv2.COLOR_BGR2RGB))
-
-            intensity_area = frac.fractureAreaPlot(data, boxsize, image,
-                                                   'raster', 'intensity_area')
-
-            for i in range(0, np.shape(image)[0]-1):
-                for j in range(0, np.shape(image)[1]-1):
-                    if threshold[i, j] == 0:
-                        intensity_area[i, j] = [0, 0, 0]
-
-            # frac.show_image(cv2.cvtColor(intensity_area, cv2.COLOR_BGR2RGB))
-            cv2.imwrite('temp/intensity_area.png', intensity_area)
+            fh.save_image(spacing, "temp/spacing.tif",
+                          dataset.profile['crs'],
+                          dataset.profile['transform'])
 
             temp = updateCanvas(intensity, hor, ver)
 
         window.Element("_Bt_intensity_plot_").Update(disabled=False)
         window.Element("_Bt_spacing_plot_").Update(disabled=False)
 
-    elif event == '_Bt_scanline_':
+    elif event == '_Bt_scanline_':  # -----------------------------------------
         hor = int(values["_Sl_horizontal_"])
         ver = int(values["_Sl_vertical_"])
         try:
@@ -394,7 +396,7 @@ while True:
         except Exception as e:
             print(e)
             sg.Popup("Invalid coordinates")
-    elif event == '_Bt_positions_':
+    elif event == '_Bt_positions_':  # ----------------------------------------
         positions = np.asarray(values['_Mt_positions_'].split(),
                                dtype=np.float64)
         positions = np.reshape(positions, (int(np.size(positions)/3), 3))
@@ -405,7 +407,7 @@ while True:
                                   markerType=cv2.MARKER_TILTED_CROSS,
                                   thickness=1)
 
-        new_dataset = rasterio.open('test1.tif', 'w', driver='GTiff',
+        new_dataset = rt.open('test1.tif', 'w', driver='GTiff',
                                     height=temp.shape[0], width=temp.shape[1],
                                     count=1, dtype=str(temp.dtype),
                                     crs=dataset.crs,
@@ -437,7 +439,7 @@ while True:
         temp = updateCanvas(intensity, hor, ver)
     elif event == '_Bt_spacing_plot_':
         temp = updateCanvas(spacing, hor, ver)
-    # print(event, values)
+    print(event, values)
 
 window.Close()
 

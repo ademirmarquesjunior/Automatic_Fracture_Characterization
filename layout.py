@@ -39,16 +39,16 @@ load_buttons = [sg.Button('Original', key="_Bt_original_", disabled=True,
                 ]
 
 main_canvas = sg.Graph(canvas_size=(500, 500), graph_bottom_left=(0, 0),
-                       enable_events=True, drag_submits=False,
+                       enable_events=True, drag_submits=False, background_color='black',
                        graph_top_right=(500, 500), key="_Canvas1_")
 
 vertical_slider = sg.Slider(
-                        range=(100, 0), orientation='v', size=(20, 10),
+                        range=(100, 0), orientation='v', size=(20, 20),
                         enable_events=True, disable_number_display=True,
                         default_value=0, key="_Sl_vertical_")
 
 horizontal_slider = sg.Slider(
-                        range=(0, 100), orientation='h', size=(40, 10),
+                        range=(0, 100), orientation='h', size=(40, 20),
                         enable_events=True, disable_number_display=True,
                         default_value=0, key="_Sl_horizontal_")
 
@@ -70,69 +70,95 @@ image_processing = sg.Frame("Image processing", [
                     [sg.Text('Adaptative thresholding'),
                      sg.Radio('Sauvola', "RADIO3", default=True),
                      sg.Radio('Niblack', "RADIO3"),
-                     sg.Radio('Phansalkar', "RADIO3", disabled=True),
+                     sg.Radio('Otsu', "RADIO3", disabled=False),
                      ],
                     [sg.Text('Skeletonization'),
                      sg.Radio('Lee', "RADIO4", default=True),
                      sg.Radio('Zhang', "RADIO4", disabled=True),
                      ],
                     [sg.Button('Image processing', key='_Bt_processing_',
-                               disabled=True,
-                               size=(50, 1)), ]]
+                               disabled=True, visible=False,
+                               size=(50, 1)),
+                     ],
+                    [sg.Text('Scale'),
+                     sg.Slider(range=(1, 100), orientation='h', size=(10, 10),
+                               default_value=100, key="_Sl_scale_")]
+                    ], visible=True
                     )
 
-layout = [[sg.Menu(menu_def, tearoff=True)],
-          [main_canvas, vertical_slider,
-           sg.Frame("", [
-                [image_processing, ],
-
-                # [
-                #     sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
-                #                                  disabled=True)]]), ],
-
-                [sg.Frame("Hough transform", [
+hough_transform = sg.Frame("Hough transform", [
                     [sg.Text('Threshold'), sg.Slider(range=(1, 100),
                                                      orientation='h',
                                                      size=(10, 10),
                                                      default_value=20,
                                                      key="_Sl_threshold_"),
-                     sg.Button('Hough', key='_Bt_hough_', disabled=True)],
+                     sg.Button('Hough', key='_Bt_hough_', disabled=True,
+                               visible=False)],
                     [sg.Text('Min'),
                      sg.Slider(range=(2, 50), orientation='h', size=(10, 10),
                                default_value=2, key="_Sl_min_"),
                      sg.Text('Max'),
                      sg.Slider(range=(2, 50), orientation='h', size=(10, 10),
                                default_value=2, key="_Sl_max_")],
-                         ]),
-                 ],
-                [sg.Frame("Connecting lines", [
-                 [sg.Text('radius'),
+                         ])
+
+line_connection = sg.Frame("Connecting lines", [
+                 [sg.Text('Maximum length (px)'),
                   sg.Slider(range=(1, 100), orientation='h', size=(10, 10),
                             default_value=50, key="_Sl_radius_"),
-                  sg.InputCombo(('alpha', 'beta', 'distance', 'deviation'),
-                                key='_Cb_mode_'),
-                  sg.Button('Connect', key='_Bt_connect_', disabled=True)],
-                 [sg.Text('alpha'), sg.Slider(range=(0, 180), orientation='h',
-                                              size=(10, 10), default_value=120,
+                  # sg.InputCombo(('alpha', 'beta', 'distance', 'deviation'),
+                  #               key='_Cb_mode_'),
+                  sg.Button('Connect', key='_Bt_connect_', disabled=True,
+                            visible=False)],
+                 [sg.Text('alpha'), sg.Slider(range=(90, 180), orientation='h',
+                                              size=(10, 10), default_value=134,
                                               key="_Sl_alpha_"),
-                  sg.Text('beta'), sg.Slider(range=(0, 180), orientation='h',
-                                             size=(10, 10), default_value=90,
-                                             key="_Sl_beta_")],
-                 ])],
-                [sg.Frame("Directional statistics", [
+                  sg.Text('beta'), sg.Slider(range=(90, 180), orientation='h',
+                                             size=(10, 10), default_value=134,
+                                             key="_Sl_beta_")]
+                 ])
+
+line_statistics = sg.Frame("Directional statistics", [
                  [sg.Text('Method'),
                   sg.InputCombo(('points', 'vertices'), key='_Cb_method_'),
                   sg.Text('Regression'), sg.InputCombo(('PCA', 'linear'),
                                                        key='_Cb_regression_'),
-                  sg.Button('Rosechart', key='_Bt_rosechart_', disabled=True)]
-                 ])],
-                [sg.Frame("Fracture statistics - intensity/spacing", [
+                  sg.Button('Rosechart', key='_Bt_rosechart_', disabled=True,
+                            visible=False)]
+                 ])
+
+aerial_statistics = sg.Frame("Fracture statistics - intensity/spacing", [
                  [sg.Text('Box size'), sg.Input(key='_In_size_', size=(5, 5)),
                   sg.InputCombo(('pixels', 'meters'), key='_Cb_measure_'),
                   sg.InputCombo(('raster', 'svg'), key='_Cb_output_'),
                   sg.Button('Process', key='_Bt_fracture_statistics_',
-                            disabled=True)]
-                 ])],
+                            disabled=True, visible=False)]
+                 ])
+
+layout = [[sg.Menu(menu_def, tearoff=True)],
+          [sg.Button('Open', size=(10, 5)),
+           sg.Button('Image processing', size=(10, 5), key='_Bt_processing_',
+                     disabled=True),
+           sg.Button('Line \ndetection', size=(10, 5), key='_Bt_hough_',
+                     disabled=True),
+           sg.Button('Line \nconnection', size=(10, 5), key='_Bt_connect_',
+                     disabled=True),
+           sg.Button('Line \nstatistics', size=(10, 5), key='_Bt_rosechart_',
+                     disabled=True),
+           sg.Button('Aerial \nstatistics', size=(10, 5),
+                     key='_Bt_fracture_statistics_', disabled=True),
+           sg.Button('Export', size=(10, 5)),
+           ],
+          [main_canvas, vertical_slider,
+           sg.Frame("", [
+                [image_processing, ],
+                # [
+                #     sg.Frame("Edge", [[sg.Button('Canny', key="_Bt_Canny_",
+                #                                  disabled=True)]]), ],
+                [hough_transform, ],
+                [line_connection, ],
+                # [line_statistics, ],
+                [aerial_statistics, ],
                 # [sg.Frame("Fracture statistics", [
                 # [sg.Input(key='_In_point0_', size=(20,10)),
                 # sg.Input(key='_In_point1_', size=(20,10)),
@@ -141,9 +167,9 @@ layout = [[sg.Menu(menu_def, tearoff=True)],
                 # sg.Button('Draw points', key='_Bt_positions_')]
                 # ])],
 
-                ])
+                ], element_justification='top')
            ],
           [horizontal_slider],
           load_buttons,
-          [sg.Text('                                                        ', key="_Tx_position_", auto_size_text=True)]
+          [sg.Text('                                                                                   ', key="_Tx_position_", auto_size_text=True)]
           ]

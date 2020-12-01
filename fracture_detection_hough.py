@@ -16,8 +16,8 @@ from sklearn.decomposition import PCA
 from PIL import Image
 from skimage.morphology import skeletonize
 from skimage.draw import line
-# from skimage.filters import (threshold_otsu, threshold_niblack,
-#                              threshold_sauvola)
+from skimage.filters import (threshold_otsu, threshold_niblack,
+                             threshold_sauvola)
 
 import colorsys
 import matplotlib.pyplot as plt
@@ -78,7 +78,7 @@ def auto_canny(image, sigma=0.33):
     return edged
 
 
-@jit(nopython=True)
+@jit(nopython=False)
 def adaptative_thresholding(image, kernelsize, mode):
     '''
     Apply a adaptative thresholding method to a grayscale image array
@@ -98,6 +98,14 @@ def adaptative_thresholding(image, kernelsize, mode):
         Grayscale image.
 
     '''
+
+    if mode == 'niblack':
+        return image <= threshold_niblack(image, window_size=kernelsize, k=0.2)
+    if mode == 'otsu':
+        return image <= threshold_otsu(image)
+    if mode == 'sauvola':
+        return image <= threshold_sauvola(image, window_size=kernelsize, k=0.5)
+
     if kernelsize % 2 == 0:  # Exit function if kernel is even
         return
 
@@ -125,7 +133,7 @@ def adaptative_thresholding(image, kernelsize, mode):
 
             # Apply thresholding method
             if mode == 'niblack':
-                T = int(np.mean(temp) + 0.2*np.std(temp))
+                T = int(np.mean(temp) + 0.5*np.std(temp))
                 if image[j, i] <= T:
                     new_image[j, i] = 0
                 else:
@@ -249,7 +257,7 @@ def add_connection(connections, obj1, obj2):
     return connections
 
 
-def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b, t):
+def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
 
     # Change list of lines to list of vertices
     line_vertices = np.reshape(lines, (int(np.size(lines)/2), 2))
@@ -329,17 +337,17 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b
         else:  # Filter candidate segments for linking and add link segments
 
             candidate_link_list = []
+            candidate_segm_list = np.unique(candidate_segm_list)
 
-            for l in range(0, np.shape(candidate_vertice)[0]-1):
-                k = candidate_segm_list[l]
+            for k in candidate_segm_list:
                 alpha = gm.compare_angles(vertice,
-                                          lines[line_vertices[index, 2]],
-                                          lines[k])
+                                          lines[int(line_vertices[index, 2])],
+                                          lines[int(k)])
                 if alpha[0] >= alpha_limit:  # and alpha[1] > 1
-                    new_segm = [int(vertice[0]), int(vertice[1]),
-                                int(alpha[2]), int(alpha[3])]  # 0, 1, 2, 3
-                    beta = gm.compare_angles(vertice, lines[line_vertices[
-                        index, 2]], new_segm)
+                    new_segm = [vertice[0], vertice[1],
+                                alpha[2], alpha[3]]  # 0, 1, 2, 3
+                    beta = gm.compare_angles(vertice, lines[int(line_vertices[
+                        index, 2])], new_segm)
                     if beta[0] >= beta_limit:
                         new_segm.append(alpha[0])  # 4 : alpha angle
                         new_segm.append(beta[0])  # 5 : beta angle
@@ -351,9 +359,6 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b
                             mean_pixels = 0
                         else:
                             mean_pixels = np.mean(pixels)
-                            # plt.plot(pixels)
-                            # print(pixels)
-                            # print(mean_pixels)
                         new_segm.append(mean_pixels)  # 7 : pixel deviation
                         new_segm.append(line_vertices[index, 2])  # 8 : ref
                         new_segm.append(k)  # 9 : line index
@@ -367,22 +372,9 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b
                                         int(np.size(candidate_link_list) /
                                             (np.size(candidate_link_list)/10)))
                                        )
-
-                # a = 0.0099667  # 0.011
-                # b = -0.0848937  # -0.0204
-                # c = -0.0133513
-                # t = 1
-                # aux = ((candidate[:, 4]*a) + (candidate[:, 5]*b) +
-                #        (candidate[:, 6]*c))
-
-                # aux = ((candidate[:, 4]*0) + (candidate[:, 5]*0) +
-                #        (window-candidate[:, 6]*1))
-
-                # row = np.where(aux == np.amax(aux))
                 row = np.lexsort((candidate[:, 6], candidate[:, 7]))[0]
 
-                # print("***" + str(candidate[row[0][0]][7]))
-                if candidate[row][7] > 0:
+                if candidate[row][7] > 0:  # Threshold for pixel deviation
                     return False
                 # if aux[row][0] < t:
                 #     print("fora")
@@ -443,7 +435,8 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b
     new_lines2 = []
     for i in range(0, np.shape(new_lines)[0]-1):
         if line_count[int(new_lines[i, 8])] <= 2:
-            if int(new_lines[i, 9]) == 0: print("hit")
+            if int(new_lines[i, 9]) == 0:
+                print("hit")
             if line_count[int(new_lines[i, 9])] <= 2:
                 if (check_connection(line_connections, int(new_lines[i, 9]),
                                      int(new_lines[i, 9])) is False):
@@ -457,79 +450,13 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit, a, b
     new_lines2 = np.reshape(new_lines2, (int(np.size(new_lines2)/4), 4))
 
     # Reshape array of new segments
-    new_lines2 = np.asarray(new_lines2, dtype=np.uint32)
+    # new_lines2 = np.asarray(new_lines2, dtype=np.uint32)
     print(np.shape(new_lines))
 
-    return np.insert(lines, np.shape(lines)[0], np.int64(new_lines2), axis=0)
+    return np.insert(lines, np.shape(lines)[0], new_lines2, axis=0)
 
 
-def findIntersection(line1, line2):
 
-    x0, y0, x1, y1 = line1
-    x2, y2, x3, y3 = line2
-
-    if dointersect(
-            point(x0, y0), point(x1, y1), point(x2, y2),
-            point(x3, y3)) == False:
-        return False
-
-    try:
-        denom = float((x0 - x1) * (y2 - y3) - (y0 - y1) * (x2 - x3))
-        x = ((x0 * y1 - y0 * x1) * (x2 - x3) -
-             (x0 - x1) * (x2 * y3 - y2 * x3)) / denom
-        y = ((x0 * y1 - y0 * x1) * (y2 - y3) -
-             (y0 - y1) * (x2 * y3 - y2 * x3)) / denom
-    except ZeroDivisionError:
-        return
-    return [x, y]
-
-
-def onsegment(p, q, r):
-    # Check if segments have points overlapping in the same direction
-    if (q.x <= max(p.x, r.x) and q.x >= min(p.x, r.x) and q.y <= max(p.y, r.y) and q.y >= min(p.y, r.y)):
-        return 1
-    return 0
-
-
-def intersection(p, q, r):
-    # Check if segments cross each other
-    val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x)*(r.y - q.y)
-    if val == 0:
-        return 0
-    if val > 0:
-        return 1
-    else:
-        return 2
-
-
-def dointersect(p1, q1, p2, q2):
-    # Check if segments intersect (cross or overlap)
-    o1 = intersection(p1, q1, p2)
-    o2 = intersection(p1, q1, q2)
-    o3 = intersection(p2, q2, p1)
-    o4 = intersection(p2, q2, q1)
-
-    if (o1 != o2 and o3 != o4):
-        return True
-    if (o1 == 0 and onsegment(p1, p2, q1)):
-        return True
-    if (o2 == 0 and onsegment(p1, q2, q1)):
-        return True
-    if (o3 == 0 and onsegment(p2, p1, q2)):
-        return True
-    if (o4 == 0 and onsegment(p2, q1, q2)):
-        return True
-    return False
-
-
-class point:
-    # Class for points
-    x = None
-    y = None
-
-    def __init__(self, v1, v2):
-        self.x = v1
-        self.y = v2
 
 
 def generateSegmGroups(lines):
@@ -563,7 +490,7 @@ def generateSegmGroups(lines):
                     path.append(j)
                     getIntersect(lines, j, path)
 
-                # value = findIntersection(lines[i], lines[j])
+                # value = gm.find_intersection(lines[i], lines[j])
                 # if value != False:
                 #     print(lines[j],lines[i])
                 #     print(value)
@@ -588,11 +515,7 @@ def generateSegmGroups(lines):
     return segm_groups
 
 
-
-
-
-def regressionGroupSegments(segm_groups, lines, mode='canvas',
-                            regression='PCA'):
+def regressionGroupSegments(segm_groups, lines, mode='canvas'):
     # Get regression line of group of segments
     regression_lines = []
     # lines0 = lines
@@ -623,7 +546,7 @@ def regressionGroupSegments(segm_groups, lines, mode='canvas',
             x1 = np.max(x)
             y0 = np.min(y)
             y1 = np.max(y)
-            canvas = np.zeros((y1-y0+1, x1-x0+1), np.uint8)
+            canvas = np.zeros((int(y1-y0+1), int(x1-x0+1)), np.uint8)
             # Draw the segments in the canvas
             for j in segm_groups[i]:
                 canvas = cv2.line(canvas, (lines[j][0]-x0, lines[j][1]-y0),
@@ -635,40 +558,23 @@ def regressionGroupSegments(segm_groups, lines, mode='canvas',
                         Y.append(m)
                         X.append(n)
 
-        # least square plane calc
-        if regression == 'linear':
-            Y = np.reshape(Y, (np.size(Y), 1))
-            A = np.vstack([X, np.ones(np.size(X))]).T
-            m, c = np.linalg.lstsq(A, Y, rcond=None)[0]
-            # plt.plot(X, Y*-1, 'bo', label="Data")
-            # plt.plot(X, (m*X+c)*-1, 'r--',label="Least Squares")
-            # plt.show()
-            line = [X[0] + x0, int(m*X[0]+c)+y0, X[-1]+x0, int(m*X[-1]+c)+y0]
-        elif regression == 'PCA':
-            pca = PCA(n_components=1)
-            data = np.transpose(np.asarray((X, Y)))
-            pca.fit(data)
-            X_pca = pca.transform(data)
-            X_new = pca.inverse_transform(X_pca)
+        pca = PCA(n_components=1)
+        data = np.transpose(np.asarray((X, Y)))
+        pca.fit(data)
+        X_pca = pca.transform(data)
+        X_new = pca.inverse_transform(X_pca)
 
-            # plt.scatter(data[:, 0], -data[:, 1])
-            # plt.scatter(X_new[:, 0], -X_new[:, 1])
-            # plt.show()
-            # plt.plot(X, (m*X+c)*-1, 'r--', label="Least Squares")
+        # Obter os extremos horizontais
+        p = np.where(X_new[:, 0] == np.amax(X_new[:, 0]))[0][0]
+        q = np.where(X_new[:, 0] == np.amin(X_new[:, 0]))[0][0]
 
-            # X_new = X_new * [1,-1]
+        # Verificar se a linha é vertical para calcular os extremos verticais
+        if p == q:
+            p = np.where(X_new[:, 1] == np.amax(X_new[:, 1]))[0][0]
+            q = np.where(X_new[:, 1] == np.amin(X_new[:, 1]))[0][0]
 
-            # Obter os extremos horizontais
-            p = np.where(X_new[:, 0] == np.amax(X_new[:, 0]))[0][0]
-            q = np.where(X_new[:, 0] == np.amin(X_new[:, 0]))[0][0]
-
-            # Verificar se a linha é vertical para calcular os extremos verticais
-            if p == q:
-                p = np.where(X_new[:, 1] == np.amax(X_new[:, 1]))[0][0]
-                q = np.where(X_new[:, 1] == np.amin(X_new[:, 1]))[0][0]
-
-            line = [int(X_new[p][0] + x0), int(X_new[p][1] + y0),
-                    int(X_new[q][0] + x0), int(X_new[q][1] + y0)]
+        line = [X_new[p][0] + x0, X_new[p][1]+y0,
+                X_new[q][0]+x0, X_new[q][1]+y0]
 
         regression_lines.append(line)
 
@@ -678,7 +584,7 @@ def regressionGroupSegments(segm_groups, lines, mode='canvas',
 def drawLines(lines, angles, shape, image=None, mode='color'):
     # Printbsegments on a canvas
     if image.any() == None:
-        canvas = np.zeros(shape, np.uint8)
+        canvas = np.full(shape, 255, dtype=np.uint8)
     else:
         if np.size(np.shape(image)) == 2:
             canvas = cv2.cvtColor(np.uint8(image), cv2.COLOR_GRAY2BGR)
@@ -690,13 +596,13 @@ def drawLines(lines, angles, shape, image=None, mode='color'):
             color = (255, 255, 255)
         else:
             if mode == 'color':
-                color = colorsys.hsv_to_rgb(angles[i][0]/180, 1, 1)
+                color = colorsys.hsv_to_rgb(angles[i][0]/180, 1, 2)
             else:
                 color = (0, 0, 0)
             color = (color[0]*255, color[1]*255, color[2]*255)
         canvas = cv2.line(canvas, (lines[i][0], lines[i][1]),
                           (lines[i][2], lines[i][3]),
-                          (int(color[0]), int(color[1]), int(color[2])), 1)
+                          (int(color[0]), int(color[1]), int(color[2])), 2)
 
     return canvas
 
@@ -726,11 +632,11 @@ def ComputeFractureStatistics(lines, threshold, offset):
     data = []
     # offset = 20
     # lines = connected_lines
-    check = np.zeros((np.shape(lines)[0]+1), dtype=bool)
+    # check = np.zeros((np.shape(lines)[0]+1), dtype=bool)
     maxH = int(np.shape(threshold)[0]/offset)+1
     maxV = int(np.shape(threshold)[1]/offset)+1
 
-    def checkArea(x0, x1, y0, y1, lines, k, check):
+    def checkArea(x0, x1, y0, y1, lines, k):
         count = 0
         vertices = []
         if lines[k][0] >= x0 and lines[k][0] <= x1 and lines[k][1] >= y0 and lines[k][1] <= y1:
@@ -742,30 +648,34 @@ def ComputeFractureStatistics(lines, threshold, offset):
             vertices.append(lines[k][3])
             count = count + 1
 
-        if count == 2:
-            check[k] = True
-            return np.reshape(vertices, (4,1))
+        # if count == 2:
+        #     check[k] = True
+        #     return np.reshape(vertices, (4,1))
 
         if count == 1:
-            border0 = [x0, y0, x1, y0]
-            intersection = findIntersection(border0, lines[k])
+            intersection = gm.find_intersection([x0, y0, x1, y0], lines[k])
             if intersection != False:
-                vertices.append(intersection)
+                count = count + 1
+                vertices.append(intersection[0])
+                vertices.append(intersection[1])
 
-            border1 = [x1, y0, x1, y1]
-            intersection = findIntersection(border1, lines[k])
+            intersection = gm.find_intersection([x1, y0, x1, y1], lines[k])
             if intersection != False:
-                vertices.append(intersection)
+                count = count + 1
+                vertices.append(intersection[0])
+                vertices.append(intersection[1])
 
-            border2 = [x0, y1, x1, y1]
-            intersection = findIntersection(border2, lines[k])
+            intersection = gm.find_intersection([x0, y1, x1, y1], lines[k])
             if intersection != False:
-                vertices.append(intersection)
+                count = count + 1
+                vertices.append(intersection[0])
+                vertices.append(intersection[1])
 
-            border3 = [x0, y1, x0, y0]
-            intersection = findIntersection(border3, lines[k])
+            intersection = gm.find_intersection([x0, y1, x0, y0], lines[k])
             if intersection != False:
-                vertices.append(intersection)
+                count = count + 1
+                vertices.append(intersection[0])
+                vertices.append(intersection[1])
 
         if count == 2:
             return np.reshape(vertices, (4, 1))
@@ -780,11 +690,10 @@ def ComputeFractureStatistics(lines, threshold, offset):
             y1 = (j+1)*offset
             box = []
             for k in range(0, np.shape(lines)[0]):
-                if check[k] == False:
-                    line = checkArea(x0, x1, y0, y1, lines, k, check)
-                    if np.size(line) == 4:
-                        # print(line)
-                        box.append(line)
+                line = checkArea(x0, x1, y0, y1, lines, k)
+                if np.size(line) == 4:
+                    # print(line)
+                    box.append(line)
 
             length = 0
             for row in box:
@@ -843,11 +752,11 @@ def fractureAreaPlot(data, max_value, canvas, mode='raster',
                                    fill=svgwrite.rgb(int(color[2]),
                                                      int(color[1]),
                                                      int(color[0]), 'RGB')))
-            canvas.add(canvas.text(str(round(row[4], 2)),
-                                   insert=(row[0]+2, row[1]+15),
-                                   stroke='none',
-                                   fill=svgwrite.rgb(15, 15, 15, '%'),
-                                   font_size='9px', font_weight="bold"))
+            # canvas.add(canvas.text(str(round(row[4], 2)),
+            #                        insert=(row[0]+2, row[1]+15),
+            #                        stroke='none',
+            #                        fill=svgwrite.rgb(15, 15, 15, '%'),
+            #                        font_size='9px', font_weight="bold"))
         elif mode == 'raster':
             canvas = cv2.rectangle(canvas, (int(row[0]), int(row[1])),
                                    (int(row[2]), int(row[3])), color, -1)
@@ -869,7 +778,7 @@ def boxScale(size, x, y, dwg):
     return
 
 
-def barColor(max_value, x, y, dwg, text):
+def barColor(max_value, x, y, dwg, title, text_min, text_max):
     color1 = colorsys.hsv_to_rgb((0.45+max_value/max_value*0.15), 1, 1)
     color1 = svgwrite.rgb(int(color1[2]*255), int(color1[1]*255),
                           int(color1[0]*255), "RGB")
@@ -891,13 +800,13 @@ def barColor(max_value, x, y, dwg, text):
                      stroke=svgwrite.rgb(10, 10, 16, '%'),
                      fill="url(#vert_lin_grad)"))
 
-    dwg.add(dwg.text('máximo', insert=(31 + x, 2 + y), stroke='none',
+    dwg.add(dwg.text(text_max, insert=(31 + x, 2 + y), stroke='none',
                      fill=svgwrite.rgb(15, 15, 15, '%'), font_size='9px',
                      font_weight="bold"))
-    dwg.add(dwg.text('mínimo', insert=(31 + x, 102 + y), stroke='none',
+    dwg.add(dwg.text(text_min, insert=(31 + x, 102 + y), stroke='none',
                      fill=svgwrite.rgb(15, 15, 15, '%'), font_size='9px',
                      font_weight="bold"))
-    dwg.add(dwg.text(text, insert=(x - 10, 115 + y), stroke='none',
+    dwg.add(dwg.text(title, insert=(20 + x, -5 + y), stroke='none',
                      fill=svgwrite.rgb(15, 15, 15, '%'), font_size='12px',
                      font_weight="bold"))
     return
@@ -1001,66 +910,6 @@ def loadEdgeData():
     # frac.show_image(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
 
     return
-
-
-def loadAtlasFile(File, offsetX, offsetY, k, segm_groups=[]):
-    import csv
-    lines = []
-    segment = []
-
-    with open(File) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=' ')
-        line_count = 0
-        for row in csv_reader:
-            if line_count < 3:  # Print the content befor the line 4 for header
-                print(row)
-            else:
-                collumn_count = 0
-                segment = []
-                for collumn in row:
-                    # Ignore collumn indexes before line 3
-                    if collumn_count > 2:
-                        try:
-                            # Get the value in each collumn and replace the
-                            # commas for dots
-                            value = float(collumn.replace(",", "."))
-                            segment.append(value)
-                        except ValueError:
-                            print("", end="")
-                    collumn_count = collumn_count + 1
-            segment = np.reshape(segment, (int(np.size(segment)/3), 3))
-
-            segm_group_row = []
-
-            # Get individual segments
-            for i in range(0, np.shape(segment)[0]-1):
-                lines.append([segment[i][0], -segment[i][2], segment[i+1][0],
-                             -segment[i+1][2]])
-                segm_group_row.append(k)
-                k = k + 1
-
-            if np.size(segm_group_row) > 0:
-                segm_groups.append(segm_group_row)
-                # print(lines)
-            line_count = line_count + 1
-
-    lines = np.reshape(lines, (np.shape(lines)[0], 4))
-
-    minX = min(np.append(lines[:, 0], lines[:, 2]))
-    minY = min(np.append(lines[:, 1], lines[:, 3]))
-    maxX = max(np.append(lines[:, 0], lines[:, 2]))
-    maxY = max(np.append(lines[:, 1], lines[:, 3]))
-
-    for i in range(0, np.shape(lines)[0]):
-        lines[i][0] = (lines[i][0]-minX+offsetX)
-        lines[i][1] = (lines[i][1]-minY+offsetY)
-        lines[i][2] = (lines[i][2]-minX+offsetX)
-        lines[i][3] = (lines[i][3]-minY+offsetY)
-
-    maxY = max(np.append(lines[:, 1], lines[:, 3]))
-    maxX = max(np.append(lines[:, 0], lines[:, 2]))
-
-    return lines, maxX, maxY, segm_groups
 
 
 '''
