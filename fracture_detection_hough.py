@@ -20,7 +20,7 @@ from skimage.filters import (threshold_otsu, threshold_niblack,
                              threshold_sauvola)
 
 import colorsys
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from numba import jit
 import time
 
@@ -180,10 +180,9 @@ def skeletonize_image(image, invert, mode):
     return new_image
 
 
-def bresenham_march(image, x1, y1, x2, y2):
+def bresenham_march(image, line_segment):
     '''
     Line iterator substituting opencv removed implementation
-    https://stackoverflow.com/questions/32328179/opencv-3-0-python-lineiterator
 
     Parameters
     ----------
@@ -200,7 +199,7 @@ def bresenham_march(image, x1, y1, x2, y2):
         List of pixel intensities for the given segment.
 
     '''
-
+    x1, y1, x2, y2 = np.int64(line_segment)
     discrete_line = line(x1, y1, x2, y2)
 
     return image[discrete_line[1], discrete_line[0]]
@@ -259,13 +258,12 @@ def add_connection(connections, obj1, obj2):
 
 def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
 
-    # Change list of lines to list of vertices
+    # Create list of vertices with indices
     line_vertices = np.reshape(lines, (int(np.size(lines)/2), 2))
-
-    indexes = np.zeros((int(np.size(lines)/2), 1), dtype=int)
-    for i in range(0, np.shape(line_vertices)[0]):
-        indexes[i] = int(i/2)  # Save lines indexes
+    indexes = np.uint64(np.arange(0, np.shape(lines)[0], 0.5))
+    indexes = np.reshape(indexes, (np.size(indexes), 1))
     line_vertices = np.append(line_vertices, indexes, -1)
+
     line_vertices = np.append(line_vertices,
                               np.zeros((int(np.size(lines)/2), 1),
                                        dtype=int), -1)  # check list
@@ -327,6 +325,7 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
                     # If one of the vertexes of a segment are within offset
                     # distance add its index to candidate list
                     if dist <= window:
+
                         # vertice_index.remove(j)
                         add_connection(connections, int(index), int(j))
                         candidate_segm_list.append(line_vertices[j, 2])
@@ -353,9 +352,8 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
                         new_segm.append(beta[0])  # 5 : beta angle
                         new_segm.append(alpha[1])  # 6 : new line lenght
 
-                        x1, y1, x2, y2 = np.int64(new_segm[0:4])
-                        pixels = bresenham_march(threshold, x1, y1, x2, y2)
-                        if np.size(pixels) < 1:
+                        pixels = bresenham_march(threshold, new_segm[0:4])
+                        if np.size(pixels) < 2:
                             mean_pixels = 0
                         else:
                             mean_pixels = np.mean(pixels)
@@ -372,7 +370,7 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
                                         int(np.size(candidate_link_list) /
                                             (np.size(candidate_link_list)/10)))
                                        )
-                row = np.lexsort((candidate[:, 6], candidate[:, 7]))[0]
+                row = np.lexsort((180-candidate[:, 5], 180-candidate[:, 4], candidate[:, 6]))[0]
 
                 if candidate[row][7] > 0:  # Threshold for pixel deviation
                     return False
@@ -385,8 +383,8 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
     '''
     index = 1
     window = radius = 50
-    alpha_limit = 120
-    beta_limit = 90
+    alpha_limit = 135
+    beta_limit = 135
     n = np.shape(line_vertices)[0]  # Number of vertices
     connections = np.zeros((n, n), dtype=bool)
     new_lines = []  # List of new segments to be added later
@@ -402,31 +400,14 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
             else:
                 new_lines = np.insert(new_lines, np.shape(new_lines)[0], aux,
                                       axis=0)
-            # new = np.uint(aux[:,0:4])
-            # new_angles = gm.get_line_angles(new)
-            # new_angles[:,1] = 30
-            # test_connect = drawLines(new, new_angles,
-            #                           (np.shape(image)[0],
-            #                           np.shape(image)[1], 3),
-            #                           cv2.cvtColor(houghlines,
-            #                                       cv2.COLOR_RGB2GRAY))
-            # cv2.imwrite("test/"+str(index)+"vertice.png", test_connect)
 
-            # for j in range(0, np.shape(aux)[0]-1):
-            #     test_connect = np.copy(houghlines)
-            #     test_connect = cv2.line(test_connect, (int(aux[j, 0]),
-            #                                            int(aux[j, 1])),
-            #                             (int(aux[j, 2]), int(aux[j, 3])),
-            #                             (255, 255, 255), 1)
-            #     cv2.imwrite("test/entry_"+str(int(aux[j, 8]))+"_"+str(int(
-            #         aux[j, 9]))+".jpg", test_connect)
     if np.size(new_lines) == 0:
-        # np.savetxt("new_lines.csv", np.asarray(new_lines), delimiter=",")
         return lines
 
-    # new_lines = new_lines[np.argsort(new_lines[:, 6])]
     end = time.time()
     print('Time: ' + str((end - start)))
+    
+    # new_lines2 = new_lines[np.lexsort((new_lines[:, 6], 180-new_lines[:, 5], 180-new_lines[:, 4]))]
 
     k = np.shape(lines)[0]  # Number of vertices
     line_connections = np.zeros((k, k), dtype=bool)
@@ -435,8 +416,6 @@ def connectLines(threshold, lines, angles, window, alpha_limit, beta_limit):
     new_lines2 = []
     for i in range(0, np.shape(new_lines)[0]-1):
         if line_count[int(new_lines[i, 8])] <= 2:
-            if int(new_lines[i, 9]) == 0:
-                print("hit")
             if line_count[int(new_lines[i, 9])] <= 2:
                 if (check_connection(line_connections, int(new_lines[i, 9]),
                                      int(new_lines[i, 9])) is False):
@@ -470,6 +449,8 @@ def generateSegmGroups(lines):
     def getIntersect(lines, i, path):
         # p1 = point(lines[i][0], lines[i][1])
         # q1 = point(lines[i][2], lines[i][3])
+        
+        angle_threshold = 134
 
         for j in range(0, np.shape(lines)[0]):
             if ((j not in path) and (checked[j] == False)):
@@ -477,12 +458,22 @@ def generateSegmGroups(lines):
 
                 connected = False
                 if (lines[i][0], lines[i][1]) == (lines[j][0], lines[j][1]):
-                    connected = True
+                    aux = gm.compare_angles((lines[i, 0], lines[i, 1]), lines[i], lines[j])
+                    if aux[0] > angle_threshold and aux[1] == 0:
+                        connected = True
                 elif (lines[i][0], lines[i][1]) == (lines[j][2], lines[j][3]):
-                    connected = True
+                    aux = gm.compare_angles((lines[i, 0], lines[i, 1]), lines[i], lines[j])
+                    if aux[0] > angle_threshold and aux[1] == 0:
+                        connected = True
                 elif (lines[i][2], lines[i][3]) == (lines[j][0], lines[j][1]):
-                    connected = True
+                    aux = gm.compare_angles((lines[i, 2], lines[i, 3]), lines[i], lines[j])
+                    if aux[0] > angle_threshold and aux[1] == 0:
+                        connected = True
                 elif (lines[i][2], lines[i][3]) == (lines[j][2], lines[j][3]):
+                    aux = gm.compare_angles((lines[i, 2], lines[i, 3]), lines[i], lines[j])
+                    if aux[0] > angle_threshold and aux[1] == 0:
+                        connected = True
+                elif i == j:
                     connected = True
 
                 if connected:
@@ -513,6 +504,24 @@ def generateSegmGroups(lines):
             segm_groups.append(path)
 
     return segm_groups
+
+
+def check_group_endpoints(segm_group, connected_lines):
+    segment_lines = connected_lines[segm_group]
+    vertices = np.reshape(segment_lines, (int(np.shape(segment_lines)[0]*2), 2))
+
+    check = np.zeros(np.shape(vertices)[0])
+    for i in range(0, np.shape(vertices)[0]):
+        for j in range(0, np.shape(vertices)[0]):
+            if i != j:
+                value = vertices[i] == vertices[j]
+                if value[0] == True and value[1] == True:
+                    check[i] += 1
+
+    i_nodes = vertices[np.where(check == 0)]
+    y_nodes = vertices[np.where(check > 1)]
+
+    return i_nodes, y_nodes
 
 
 def regressionGroupSegments(segm_groups, lines, mode='canvas'):
@@ -573,8 +582,8 @@ def regressionGroupSegments(segm_groups, lines, mode='canvas'):
             p = np.where(X_new[:, 1] == np.amax(X_new[:, 1]))[0][0]
             q = np.where(X_new[:, 1] == np.amin(X_new[:, 1]))[0][0]
 
-        line = [X_new[p][0] + x0, X_new[p][1]+y0,
-                X_new[q][0]+x0, X_new[q][1]+y0]
+        line = [X_new[p][0] + x0, X_new[p][1] + y0,
+                X_new[q][0] + x0, X_new[q][1] + y0]
 
         regression_lines.append(line)
 
@@ -602,7 +611,7 @@ def drawLines(lines, angles, shape, image=None, mode='color'):
             color = (color[0]*255, color[1]*255, color[2]*255)
         canvas = cv2.line(canvas, (lines[i][0], lines[i][1]),
                           (lines[i][2], lines[i][3]),
-                          (int(color[0]), int(color[1]), int(color[2])), 2)
+                          (int(color[0]), int(color[1]), int(color[2])), 1)
 
     return canvas
 
@@ -809,106 +818,6 @@ def barColor(max_value, x, y, dwg, title, text_min, text_max):
     dwg.add(dwg.text(title, insert=(20 + x, -5 + y), stroke='none',
                      fill=svgwrite.rgb(15, 15, 15, '%'), font_size='12px',
                      font_weight="bold"))
-    return
-
-
-def loadEdgeData():
-    import csv
-    import numpy as np
-    File = 'Results.csv'
-    with open(File) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=';')
-        line_count = 0
-        table = []
-        for row in csv_reader:
-            # print(row)
-            segment = []
-            # lineId = row[1]
-
-            if line_count > 0:
-                segment.append(int(float(row[1])))
-                segment.append(float(row[3]))
-                segment.append(float(row[4]))
-                segment.append(float(row[8]))
-                table.append(segment)
-
-            line_count += 1
-        table = np.reshape(table, (int(np.size(table)/4), 4))
-
-        # 826/2.75
-        # 898/2.99
-
-        table[:, 1] = table[:, 1]*826/2.75
-        table[:, 2] = table[:, 2]*898/2.99
-        table[:, 3] = table[:, 3]*898/2.99
-
-    # canvas = np.full((np.shape(image)[0], np.shape(image)[1], 3), 255)
-    canvas = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-
-    max_value = np.max(table[:, 3])
-
-    import svgwrite
-    dwg = svgwrite.Drawing('Ridge.svg', profile='tiny')
-    lines = []
-    line_aux = []
-    iniciolinha = True
-    fract_id = 0
-    aux = -1
-    count = 0
-    count2 = 0
-    for i in range(np.shape(table)[0]):
-        # color = colorsys.hsv_to_rgb((0.45+table[i][3]/max_value*0.15),1,1)
-        # color = [int(color[0]*255), int(color[1]*255), int(color[2]*255)]
-        # canvas = cv2.circle(canvas, (int(table[i][1]), int(table[i][2])),
-        #                       int(table[i][3]/2), color, -1)
-        # print(int(table[i][3]*300))
-        aux = table[i][0]
-
-        if fract_id != aux:
-            iniciolinha = True
-            count = 2
-            fract_id = aux
-            dwg.add(dwg.text(str(int(table[i][0])), insert=(table[i][1]+3,
-                                                            table[i][2]+3),
-                             stroke='none', fill=svgwrite.rgb(15, 15, 15, '%'),
-                             font_size='3px'))
-
-        if i != 0 and iniciolinha == False:
-            line_aux.append(table[i-1][1])
-            line_aux.append(table[i-1][2])
-            line_aux.append(table[i][1])
-            line_aux.append(table[i][2])
-            lines.append(line_aux)
-            line_aux = []
-
-        if count >= 1:
-            count -= 1
-        else:
-            iniciolinha = False
-            count2 += 1
-
-    lines = np.reshape(lines, (np.shape(lines)[0], np.shape(lines)[1]))
-
-    for i in range(np.shape(lines)[0]):
-        dwg.add(dwg.line(start=(lines[i][0], lines[i][1]),
-                         end=(lines[i][2], lines[i][3]),
-                         stroke=svgwrite.rgb(10, 10, 16, '%'),
-                         stroke_width=0.5))
-    dwg.save()
-
-    with open('aperture.csv', 'w', newline='') as csvfile:
-        spamwriter = csv.writer(csvfile, delimiter=',',
-                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        spamwriter.writerow(['id', 'x', 'y', 'width'])
-        for i in range(np.shape(table)[0]):
-            if i > 0:
-                spamwriter.writerow([int(table[i][0]), table[i][1],
-                                     table[i][2], table[i][3]])
-
-    canvas = np.uint8(canvas)
-    cv2.imwrite('ridge.png', canvas)
-    # frac.show_image(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
-
     return
 
 
