@@ -9,6 +9,7 @@ import numpy as np
 import csv
 import rasterio as rt
 from rasterio.enums import Resampling
+import shapefile
 # from rasterio.plot import show
 # import cv2
 # import svgwrite
@@ -228,3 +229,40 @@ def load_ridge_data(results_file):
     lines = np.reshape(lines, (np.shape(lines)[0], np.shape(lines)[1]))
 
     return lines, aperture_data
+
+
+def save_shapefile(file_address, regression_lines, segm_group_angles, dataset):
+    '''
+    Save line segments to shapefiles.
+
+    Parameters
+    ----------
+    file_address : String
+        DESCRIPTION.
+    regression_lines : Array of int64
+        Array of line segments.
+    segm_group_angles : Array of int64
+        Array of angles and line lengths.
+    dataset : Object
+        Rasterio object.
+
+    Returns
+    -------
+    None.
+
+    '''
+    w = shapefile.Writer(file_address, shapeType=3)
+    w.field('fracture_i', 'N')
+    w.field('fractdir', 'N')
+    w.field('fractlength', 'N')
+
+    for i in range(0, np.shape(regression_lines)[0]):
+        point0 = dataset.xy(regression_lines[i, 1], regression_lines[i, 0])
+        point1 = dataset.xy(regression_lines[i, 3], regression_lines[i, 2])
+        # Add record
+        w.record(i, segm_group_angles[i, 0], 0)
+        # Add geometry
+        w.line([[[point0[0], point0[1]], [point1[0], point1[1]]]])
+
+    w.close()
+    return
